@@ -196,15 +196,12 @@ export const SelectedShapeActions = ({
         <div>{renderAction("changeBackgroundColor")}</div>
       )}
       {showFillIcons && renderAction("changeFillStyle")}
-
       {(hasStrokeWidth(appState.activeTool.type) ||
         targetElements.some((element) => hasStrokeWidth(element.type))) &&
         renderAction("changeStrokeWidth")}
-
       {(appState.activeTool.type === "freedraw" ||
         targetElements.some((element) => element.type === "freedraw")) &&
         renderAction("changeStrokeShape")}
-
       {(hasStrokeStyle(appState.activeTool.type) ||
         targetElements.some((element) => hasStrokeStyle(element.type))) && (
         <>
@@ -212,17 +209,14 @@ export const SelectedShapeActions = ({
           {renderAction("changeSloppiness")}
         </>
       )}
-
       {(canChangeRoundness(appState.activeTool.type) ||
         targetElements.some((element) => canChangeRoundness(element.type))) && (
         <>{renderAction("changeRoundness")}</>
       )}
-
       {(toolIsArrow(appState.activeTool.type) ||
         targetElements.some((element) => toolIsArrow(element.type))) && (
         <>{renderAction("changeArrowType")}</>
       )}
-
       {(appState.activeTool.type === "text" ||
         targetElements.some(isTextElement)) && (
         <>
@@ -233,16 +227,13 @@ export const SelectedShapeActions = ({
             renderAction("changeTextAlign")}
         </>
       )}
-
       {shouldAllowVerticalAlign(targetElements, elementsMap) &&
         renderAction("changeVerticalAlign")}
       {(canHaveArrowheads(appState.activeTool.type) ||
         targetElements.some((element) => canHaveArrowheads(element.type))) && (
         <>{renderAction("changeArrowhead")}</>
       )}
-
       {renderAction("changeOpacity")}
-
       <fieldset>
         <legend>{t("labels.layers")}</legend>
         <div className="buttonList">
@@ -252,7 +243,6 @@ export const SelectedShapeActions = ({
           {renderAction("bringToFront")}
         </div>
       </fieldset>
-
       {showAlignActions && !isSingleElementBoundContainer && (
         <fieldset>
           <legend>{t("labels.align")}</legend>
@@ -1181,7 +1171,6 @@ export const ShapesSwitcher = ({
         },
       )}
       <div className="App-toolbar__divider" />
-
       <DropdownMenu open={isExtraToolsMenuOpen}>
         <DropdownMenu.Trigger
           className={clsx("App-toolbar__extra-tools-trigger", {
