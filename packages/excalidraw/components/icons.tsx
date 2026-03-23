@@ -375,6 +375,16 @@ export const LineIcon = createIcon(
   modifiedTablerIconProps,
 );
 
+// Relynk: Room free-draw tool — a closed polygon outline representing a room
+export const RoomFreedrawIcon = createIcon(
+  <g strokeWidth="1.5" fill="none">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M5 19 L5 8 L12 4 L19 8 L19 19 Z" />
+    <path d="M9 19 L9 13 L15 13 L15 19" />
+  </g>,
+  tablerIconProps,
+);
+
 export const PenModeIcon = createIcon(
   <g strokeWidth="1.25">
     <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>

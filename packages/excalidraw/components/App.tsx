@@ -326,6 +326,8 @@ import {
 } from "../actions";
 import { actionWrapTextInContainer } from "../actions/actionBoundText";
 import { actionToggleHandTool, zoomToFit } from "../actions/actionCanvas";
+// Relynk room actions
+import { actionChangeRoomName } from "../actions/actionRoomProperties";
 import { actionPaste } from "../actions/actionClipboard";
 import { actionCopyElementLink } from "../actions/actionElementLink";
 import { actionUnlockAllElements } from "../actions/actionElementLock";
@@ -843,6 +845,8 @@ class App extends React.Component<AppProps, AppState> {
     this.actionManager.registerAll(actions);
     this.actionManager.registerAction(createUndoAction(this.history));
     this.actionManager.registerAction(createRedoAction(this.history));
+    // Relynk: register room actions explicitly to ensure they are not tree-shaken
+    this.actionManager.registerAction(actionChangeRoomName);
 
     // in case internal editor APIs call this early, otherwise we need
     // to construct this in componentDidMount because componentWillUnmount
@@ -1166,13 +1170,13 @@ class App extends React.Component<AppProps, AppState> {
     const currentBinding = startDragged
       ? "startBinding"
       : endDragged
-      ? "endBinding"
-      : null;
+        ? "endBinding"
+        : null;
     const otherBinding = startDragged
       ? "endBinding"
       : endDragged
-      ? "startBinding"
-      : null;
+        ? "startBinding"
+        : null;
     const isAlreadyInsideBindingToSameElement =
       (otherBinding &&
         arrow[otherBinding]?.mode === "inside" &&
@@ -1812,7 +1816,7 @@ class App extends React.Component<AppProps, AppState> {
                           : undefined
                       }
                       src={
-                        src?.type !== "document" ? src?.link ?? "" : undefined
+                        src?.type !== "document" ? (src?.link ?? "") : undefined
                       }
                       // https://stackoverflow.com/q/18470015
                       scrolling="no"
@@ -3894,14 +3898,14 @@ class App extends React.Component<AppProps, AppState> {
       typeof opts.position === "object"
         ? opts.position.clientX
         : opts.position === "cursor"
-        ? this.lastViewportPosition.x
-        : this.state.width / 2 + this.state.offsetLeft;
+          ? this.lastViewportPosition.x
+          : this.state.width / 2 + this.state.offsetLeft;
     const clientY =
       typeof opts.position === "object"
         ? opts.position.clientY
         : opts.position === "cursor"
-        ? this.lastViewportPosition.y
-        : this.state.height / 2 + this.state.offsetTop;
+          ? this.lastViewportPosition.y
+          : this.state.height / 2 + this.state.offsetTop;
 
     const { x, y } = viewportCoordsToSceneCoords(
       { clientX, clientY },
@@ -5046,8 +5050,8 @@ class App extends React.Component<AppProps, AppState> {
                 prevState.currentItemArrowType === ARROW_TYPE.sharp
                   ? ARROW_TYPE.round
                   : prevState.currentItemArrowType === ARROW_TYPE.round
-                  ? ARROW_TYPE.elbow
-                  : ARROW_TYPE.sharp,
+                    ? ARROW_TYPE.elbow
+                    : ARROW_TYPE.sharp,
             }));
           }
 
@@ -6226,18 +6230,18 @@ class App extends React.Component<AppProps, AppState> {
           y: parentCenterPosition.elementCenterY,
         }
       : !existingTextElement
-      ? {
-          x: textCreationGridPoint?.x ?? sceneX,
-          y:
-            textCreationGridPoint === null
-              ? // Free text starts from a point cursor, so center the first line box on it.
-                sceneY - getLineHeightInPx(fontSize, lineHeight) / 2
-              : textCreationGridPoint.y,
-        }
-      : {
-          x: sceneX,
-          y: sceneY,
-        };
+        ? {
+            x: textCreationGridPoint?.x ?? sceneX,
+            y:
+              textCreationGridPoint === null
+                ? // Free text starts from a point cursor, so center the first line box on it.
+                  sceneY - getLineHeightInPx(fontSize, lineHeight) / 2
+                : textCreationGridPoint.y,
+          }
+        : {
+            x: sceneX,
+            y: sceneY,
+          };
 
     const element =
       existingTextElement ||
@@ -7847,11 +7851,15 @@ class App extends React.Component<AppProps, AppState> {
       this.handleTextOnPointerDown(event, pointerDownState);
     } else if (
       this.state.activeTool.type === "arrow" ||
-      this.state.activeTool.type === "line"
+      this.state.activeTool.type === "line" ||
+      this.state.activeTool.type === "room-freedraw"
     ) {
       this.handleLinearElementOnPointerDown(
         event,
-        this.state.activeTool.type,
+        // room-freedraw uses the line element type under the hood
+        this.state.activeTool.type === "room-freedraw"
+          ? "line"
+          : this.state.activeTool.type,
         pointerDownState,
       );
     } else if (this.state.activeTool.type === "freedraw") {
@@ -8188,12 +8196,13 @@ class App extends React.Component<AppProps, AppState> {
       ),
       // we need to duplicate because we'll be updating this state
       lastCoords: { ...origin },
-      originalElements: this.scene
-        .getNonDeletedElements()
-        .reduce((acc, element) => {
+      originalElements: this.scene.getNonDeletedElements().reduce(
+        (acc, element) => {
           acc.set(element.id, deepCopyElement(element));
           return acc;
-        }, new Map() as PointerDownState["originalElements"]),
+        },
+        new Map() as PointerDownState["originalElements"],
+      ),
       resize: {
         handleType: false,
         isResizing: false,
@@ -9187,6 +9196,14 @@ class App extends React.Component<AppProps, AppState> {
 
       this.scene.mutateElement(element, {
         points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(0, 0)],
+        // Tag element with room tool metadata when drawn with a room tool
+        ...(this.state.activeTool.type === "room-freedraw" && {
+          customData: {
+            ...element.customData,
+            roomTool: "room-freedraw",
+            roomName: element.customData?.roomName ?? "",
+          },
+        }),
       });
 
       this.scene.insertElement(element);

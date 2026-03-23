@@ -156,7 +156,9 @@ export type ToolType =
   | "frame"
   | "magicframe"
   | "embeddable"
-  | "laser";
+  | "laser"
+  // Relynk room tools
+  | "room-freedraw";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 

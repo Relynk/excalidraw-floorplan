@@ -188,6 +188,7 @@ export const SelectedShapeActions = ({
 
   return (
     <div className="selected-shape-actions">
+      {renderAction("changeRoomName")}
       <div>
         {canChangeStrokeColor(appState, targetElements) &&
           renderAction("changeStrokeColor")}
@@ -469,8 +470,8 @@ const CombinedArrowProperties = ({
                     return element.elbowed
                       ? "elbow"
                       : element.roundness
-                      ? "round"
-                      : "sharp";
+                        ? "round"
+                        : "sharp";
                   }
                   return null;
                 },
@@ -802,6 +803,10 @@ export const CompactShapeActions = ({
 
   return (
     <div className="compact-shape-actions">
+      {/* Room name */}
+      <div className="compact-action-item">
+        {renderAction("changeRoomName")}
+      </div>
       {/* Stroke Color */}
       {canChangeStrokeColor(appState, targetElements) && (
         <div className={clsx("compact-action-item")}>
@@ -1192,12 +1197,12 @@ export const ShapesSwitcher = ({
           {frameToolSelected
             ? frameToolIcon
             : embeddableToolSelected
-            ? EmbedIcon
-            : laserToolSelected && !app.props.isCollaborating
-            ? laserPointerToolIcon
-            : lassoToolSelected
-            ? LassoIcon
-            : extraToolsIcon}
+              ? EmbedIcon
+              : laserToolSelected && !app.props.isCollaborating
+                ? laserPointerToolIcon
+                : lassoToolSelected
+                  ? LassoIcon
+                  : extraToolsIcon}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content
           onClickOutside={() => setIsExtraToolsMenuOpen(false)}

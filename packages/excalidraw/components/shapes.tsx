@@ -13,6 +13,7 @@ import {
   EraserIcon,
   laserPointerToolIcon,
   handIcon,
+  RoomFreedrawIcon,
 } from "./icons";
 
 import type { AppClassProperties } from "../types";
@@ -113,6 +114,16 @@ export const SHAPES = [
     numericKey: null,
     fillable: false,
     toolbar: false,
+  },
+  // Relynk room tools
+  {
+    icon: RoomFreedrawIcon,
+    value: "room-freedraw",
+    key: null,
+    numericKey: null,
+    fillable: false,
+    toolbar: true,
+    label: "Room: Free draw",
   },
 ] as const;
 

@@ -461,6 +461,8 @@ export const TOOL_TYPE = {
   magicframe: "magicframe",
   embeddable: "embeddable",
   laser: "laser",
+  // Relynk room tools
+  "room-freedraw": "room-freedraw",
 } as const;
 
 export const EDITOR_LS_KEYS = {
