@@ -1,4 +1,6 @@
 import {
+  closestPointOnSegment,
+  lineSegment,
   pointFrom,
   pointRotateRads,
   rangeInclusive,
@@ -13,7 +15,8 @@ import {
   getDraggedElementsBounds,
   getElementAbsoluteCoords,
 } from "@excalidraw/element";
-import { isBoundToContainer } from "@excalidraw/element";
+import { isBoundToContainer, isLinearElement } from "@excalidraw/element";
+import { LinearElementEditor } from "@excalidraw/element";
 
 import { getMaximumGroups } from "@excalidraw/element";
 
@@ -215,6 +218,34 @@ export const getElementsCorners = (
 
   if (elements.length === 1) {
     const element = elements[0];
+
+    // For linear elements (lines, arrows), return the actual polyline vertices
+    // plus the midpoint of each segment — matching the attachment-point behaviour
+    // seen on shapes (corners + edge midpoints).
+    if (isLinearElement(element) && !boundingBoxCorners) {
+      const points = LinearElementEditor.getPointsGlobalCoordinates(
+        element,
+        elementsMap,
+      );
+      // Apply drag offset to each vertex when dragging an existing element
+      const shifted = dragOffset
+        ? points.map((p) =>
+            pointFrom<GlobalPoint>(p[0] + dragOffset.x, p[1] + dragOffset.y),
+          )
+        : points;
+
+      // Build: all vertices + midpoint of every consecutive segment
+      const snapPoints: GlobalPoint[] = [...shifted];
+      for (let i = 0; i < shifted.length - 1; i++) {
+        snapPoints.push(
+          pointFrom<GlobalPoint>(
+            (shifted[i][0] + shifted[i + 1][0]) / 2,
+            (shifted[i][1] + shifted[i + 1][1]) / 2,
+          ),
+        );
+      }
+      return snapPoints.map((p) => pointFrom(round(p[0]), round(p[1])));
+    }
 
     let [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
       element,
@@ -1399,6 +1430,156 @@ export const getSnapLinesAtPointer = (
   };
 };
 
+/**
+ * Snaps a single pointer position against reference element vertices during
+ * point-by-point linear drawing (e.g. the room-freedraw tool).
+ *
+ * This is a lightweight variant of `getSnapLinesAtPointer` that:
+ * - Optionally accepts a pre-built list of reference elements so callers can
+ *   exclude the element currently being drawn.
+ * - Returns `{ snapOffset, snapLines }` matching the shape expected by
+ *   `snapNewElement` / `snapDraggedElements`.
+ *
+ * The SnapCache must already be populated by the caller before this is invoked.
+ */
+export const snapLinearElementPoint = (
+  pointer: Vector2D,
+  app: AppClassProperties,
+  event: KeyboardModifiersObject,
+  elementsMap: ElementsMap,
+  referenceElements?: readonly ExcalidrawElement[],
+): {
+  snapOffset: Vector2D;
+  snapLines: SnapLine[];
+} => {
+  if (!isSnappingEnabled({ event, selectedElements: [], app })) {
+    return { snapOffset: { x: 0, y: 0 }, snapLines: [] };
+  }
+
+  const snapDistance = getSnapDistance(app.state.zoom.value);
+  const minOffset: Vector2D = { x: snapDistance, y: snapDistance };
+
+  const horizontalSnapLines: PointerSnapLine[] = [];
+  const verticalSnapLines: PointerSnapLine[] = [];
+
+  const refs =
+    referenceElements ??
+    getVisibleAndNonSelectedElements(
+      app.scene.getNonDeletedElements(),
+      [],
+      app.state,
+      elementsMap,
+    );
+
+  // Track the best segment snap separately: Euclidean distance to a foot
+  // point on a line segment.  When this wins it overrides axis snaps.
+  let bestSegmentDist = snapDistance;
+  let bestSegmentPoint: GlobalPoint | null = null;
+
+  for (const referenceElement of refs) {
+    if (isLinearElement(referenceElement)) {
+      // --- Segment snapping: find closest foot point across all segments ---
+      const globalPts = LinearElementEditor.getPointsGlobalCoordinates(
+        referenceElement,
+        elementsMap,
+      );
+      for (let i = 0; i < globalPts.length - 1; i++) {
+        const seg = lineSegment<GlobalPoint>(globalPts[i], globalPts[i + 1]);
+        const foot = closestPointOnSegment<GlobalPoint>(
+          pointFrom<GlobalPoint>(pointer.x, pointer.y),
+          seg,
+        );
+        const dx = foot[0] - pointer.x;
+        const dy = foot[1] - pointer.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < bestSegmentDist) {
+          bestSegmentDist = dist;
+          bestSegmentPoint = foot;
+        }
+      }
+    } else {
+      // --- Corner/vertex axis snapping for non-linear elements ---
+      const corners = getElementsCorners([referenceElement], elementsMap);
+
+      for (const corner of corners) {
+        const offsetX = corner[0] - pointer.x;
+
+        if (Math.abs(offsetX) <= Math.abs(minOffset.x)) {
+          if (Math.abs(offsetX) < Math.abs(minOffset.x)) {
+            verticalSnapLines.length = 0;
+          }
+
+          verticalSnapLines.push({
+            type: "pointer",
+            points: [corner, pointFrom(corner[0], pointer.y)],
+            direction: "vertical",
+          });
+
+          minOffset.x = offsetX;
+        }
+
+        const offsetY = corner[1] - pointer.y;
+
+        if (Math.abs(offsetY) <= Math.abs(minOffset.y)) {
+          if (Math.abs(offsetY) < Math.abs(minOffset.y)) {
+            horizontalSnapLines.length = 0;
+          }
+
+          horizontalSnapLines.push({
+            type: "pointer",
+            points: [corner, pointFrom(pointer.x, corner[1])],
+            direction: "horizontal",
+          });
+
+          minOffset.y = offsetY;
+        }
+      }
+    }
+  }
+
+  // If a segment snap is closer than any axis snap, use it exclusively.
+  // Represent it as two PointerSnapLines (one horizontal, one vertical)
+  // meeting at the foot point — this renders the same crosshair the
+  // existing pointer-snap system uses.
+  if (bestSegmentPoint !== null) {
+    const foot = bestSegmentPoint;
+    return {
+      snapOffset: {
+        x: foot[0] - pointer.x,
+        y: foot[1] - pointer.y,
+      },
+      snapLines: [
+        {
+          type: "pointer",
+          points: [foot, pointFrom(foot[0], pointer.y)],
+          direction: "vertical",
+        } satisfies PointerSnapLine,
+        {
+          type: "pointer",
+          points: [foot, pointFrom(pointer.x, foot[1])],
+          direction: "horizontal",
+        } satisfies PointerSnapLine,
+      ],
+    };
+  }
+
+  const snapOffset: Vector2D = {
+    x:
+      verticalSnapLines.length > 0
+        ? verticalSnapLines[0].points[0][0] - pointer.x
+        : 0,
+    y:
+      horizontalSnapLines.length > 0
+        ? horizontalSnapLines[0].points[0][1] - pointer.y
+        : 0,
+  };
+
+  return {
+    snapOffset,
+    snapLines: [...verticalSnapLines, ...horizontalSnapLines],
+  };
+};
+
 export const isActiveToolNonLinearSnappable = (
   activeToolType: AppState["activeTool"]["type"],
 ) => {
@@ -1411,4 +1592,14 @@ export const isActiveToolNonLinearSnappable = (
     activeToolType === TOOL_TYPE.image ||
     activeToolType === TOOL_TYPE.text
   );
+};
+
+/**
+ * Returns true for tools that use point-by-point linear drawing and should
+ * benefit from object-to-point snapping while drawing (e.g. room-freedraw).
+ */
+export const isActiveToolLinearSnappable = (
+  activeToolType: AppState["activeTool"]["type"],
+) => {
+  return activeToolType === TOOL_TYPE["room-freedraw"];
 };

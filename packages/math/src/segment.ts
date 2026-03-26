@@ -152,6 +152,33 @@ export const distanceToLineSegment = <Point extends LocalPoint | GlobalPoint>(
 };
 
 /**
+ * Returns the closest point on a line segment to the given point.
+ * When the perpendicular projection falls outside the segment, returns
+ * the nearer endpoint.
+ */
+export const closestPointOnSegment = <Point extends LocalPoint | GlobalPoint>(
+  point: Point,
+  seg: LineSegment<Point>,
+): Point => {
+  const [x, y] = point;
+  const [[x1, y1], [x2, y2]] = seg;
+
+  const C = x2 - x1;
+  const D = y2 - y1;
+  const len_sq = C * C + D * D;
+
+  if (len_sq === 0) {
+    // Degenerate segment — both endpoints are the same
+    return seg[0];
+  }
+
+  const param = ((x - x1) * C + (y - y1) * D) / len_sq;
+  const t = Math.max(0, Math.min(1, param));
+
+  return [x1 + t * C, y1 + t * D] as unknown as Point;
+};
+
+/**
  * Returns the intersection point of a segment and a line
  *
  * @param l

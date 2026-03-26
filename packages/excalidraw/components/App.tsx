@@ -401,6 +401,8 @@ import {
   getSnapLinesAtPointer,
   snapDraggedElements,
   isActiveToolNonLinearSnappable,
+  isActiveToolLinearSnappable,
+  snapLinearElementPoint,
   snapNewElement,
   snapResizingElements,
   isSnappingEnabled,
@@ -6788,7 +6790,8 @@ class App extends React.Component<AppProps, AppState> {
 
     if (
       !this.state.newElement &&
-      isActiveToolNonLinearSnappable(this.state.activeTool.type)
+      (isActiveToolNonLinearSnappable(this.state.activeTool.type) ||
+        isActiveToolLinearSnappable(this.state.activeTool.type))
     ) {
       const { originOffset, snapLines } = getSnapLinesAtPointer(
         this.scene.getNonDeletedElements(),
@@ -6906,6 +6909,50 @@ class App extends React.Component<AppProps, AppState> {
 
       setCursorForShape(this.interactiveCanvas, this.state);
 
+      // For room-freedraw, compute object-snapped pointer coordinates so
+      // every point placement and the live rubber-band segment both snap to
+      // vertices of existing elements (including other rooms/lines).
+      let snappedPointerX = scenePointerX;
+      let snappedPointerY = scenePointerY;
+      if (
+        isActiveToolLinearSnappable(this.state.activeTool.type) &&
+        !shouldRotateWithDiscreteAngle(event.nativeEvent)
+      ) {
+        const elementsMap = this.scene.getNonDeletedElementsMap();
+        // Exclude the element being drawn from snap references so it doesn't
+        // snap to its own (incomplete) vertices.
+        const referenceElements = this.scene
+          .getNonDeletedElements()
+          .filter((el) => el.id !== multiElement.id);
+        // Populate the snap cache lazily (cleared on each pointer-up).
+        if (!SnapCache.getReferenceSnapPoints()) {
+          SnapCache.setReferenceSnapPoints(
+            getReferenceSnapPoints(
+              referenceElements,
+              [],
+              this.state,
+              elementsMap,
+            ),
+          );
+        }
+        const { snapOffset, snapLines } = snapLinearElementPoint(
+          { x: scenePointerX, y: scenePointerY },
+          this,
+          event,
+          elementsMap,
+          referenceElements,
+        );
+        snappedPointerX = scenePointerX + snapOffset.x;
+        snappedPointerY = scenePointerY + snapOffset.y;
+        this.setState((prevState) => {
+          const nextSnapLines = updateStable(prevState.snapLines, snapLines);
+          if (prevState.snapLines === nextSnapLines) {
+            return null;
+          }
+          return { snapLines: nextSnapLines };
+        });
+      }
+
       if (lastPoint === lastCommittedPoint) {
         const hoveredElement =
           isArrowElement(this.state.newElement) &&
@@ -6949,7 +6996,7 @@ class App extends React.Component<AppProps, AppState> {
           // if we haven't yet created a temp point and we're beyond commit-zone
           // threshold, add a point
           pointDistance(
-            pointFrom(scenePointerX - rx, scenePointerY - ry),
+            pointFrom(snappedPointerX - rx, snappedPointerY - ry),
             lastPoint,
           ) >= LINE_CONFIRM_THRESHOLD
         ) {
@@ -6958,7 +7005,10 @@ class App extends React.Component<AppProps, AppState> {
             {
               points: [
                 ...points,
-                pointFrom<LocalPoint>(scenePointerX - rx, scenePointerY - ry),
+                pointFrom<LocalPoint>(
+                  snappedPointerX - rx,
+                  snappedPointerY - ry,
+                ),
               ],
             },
             { informMutation: false, isDragging: false },
@@ -6987,7 +7037,7 @@ class App extends React.Component<AppProps, AppState> {
         points.length > 2 &&
         lastCommittedPoint &&
         pointDistance(
-          pointFrom(scenePointerX - rx, scenePointerY - ry),
+          pointFrom(snappedPointerX - rx, snappedPointerY - ry),
           lastCommittedPoint,
         ) < LINE_CONFIRM_THRESHOLD
       ) {
@@ -7051,8 +7101,8 @@ class App extends React.Component<AppProps, AppState> {
         const newState = LinearElementEditor.handlePointerMove(
           event.nativeEvent,
           this,
-          scenePointerX,
-          scenePointerY,
+          snappedPointerX,
+          snappedPointerY,
           this.state.selectedLinearElement,
         );
         if (newState) {
@@ -9111,9 +9161,22 @@ class App extends React.Component<AppProps, AppState> {
 
       setCursor(this.interactiveCanvas, CURSOR_TYPE.POINTER);
     } else {
+      // For room-freedraw, apply the hover-phase snap offset to the starting
+      // point so the first vertex lands on a snapped position.
+      const originX =
+        isActiveToolLinearSnappable(this.state.activeTool.type) &&
+        this.state.originSnapOffset
+          ? pointerDownState.origin.x + this.state.originSnapOffset.x
+          : pointerDownState.origin.x;
+      const originY =
+        isActiveToolLinearSnappable(this.state.activeTool.type) &&
+        this.state.originSnapOffset
+          ? pointerDownState.origin.y + this.state.originSnapOffset.y
+          : pointerDownState.origin.y;
+
       const [gridX, gridY] = getGridPoint(
-        pointerDownState.origin.x,
-        pointerDownState.origin.y,
+        originX,
+        originY,
         event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
       );
 
