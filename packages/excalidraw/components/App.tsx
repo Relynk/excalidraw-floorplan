@@ -327,7 +327,10 @@ import {
 import { actionWrapTextInContainer } from "../actions/actionBoundText";
 import { actionToggleHandTool, zoomToFit } from "../actions/actionCanvas";
 // Relynk room actions
-import { actionChangeRoomName } from "../actions/actionRoomProperties";
+import {
+  actionChangeRoomName,
+  isRoomElement,
+} from "../actions/actionRoomProperties";
 import { actionPaste } from "../actions/actionClipboard";
 import { actionCopyElementLink } from "../actions/actionElementLink";
 import { actionUnlockAllElements } from "../actions/actionElementLock";
@@ -6840,12 +6843,45 @@ class App extends React.Component<AppProps, AppState> {
       this.state.selectedLinearElement?.isEditing &&
       !this.state.selectedLinearElement.isDragging
     ) {
+      // For room elements in edit mode, snap the hover pointer to existing
+      // element vertices/segments before passing to handlePointerMoveInEditMode.
+      // This ensures the "preview point" for Alt+click also snaps correctly.
+      let editModePointerX = scenePointerX;
+      let editModePointerY = scenePointerY;
+      if (
+        !this.state.newElement &&
+        !shouldRotateWithDiscreteAngle(event.nativeEvent)
+      ) {
+        const editingEl = LinearElementEditor.getElement(
+          this.state.selectedLinearElement.elementId,
+          this.scene.getNonDeletedElementsMap(),
+        );
+        if (editingEl && isRoomElement(editingEl)) {
+          const refElements = this.scene
+            .getNonDeletedElements()
+            .filter((el) => el.id !== editingEl.id);
+          const { snapOffset, snapLines } = snapLinearElementPoint(
+            { x: scenePointerX, y: scenePointerY },
+            this,
+            event,
+            this.scene.getNonDeletedElementsMap(),
+            refElements,
+          );
+          editModePointerX = scenePointerX + snapOffset.x;
+          editModePointerY = scenePointerY + snapOffset.y;
+          this.setState((prevState) => {
+            const next = updateStable(prevState.snapLines, snapLines);
+            return prevState.snapLines === next ? null : { snapLines: next };
+          });
+        }
+      }
+
       const editingLinearElement = this.state.newElement
         ? null
         : LinearElementEditor.handlePointerMoveInEditMode(
             event,
-            scenePointerX,
-            scenePointerY,
+            editModePointerX,
+            editModePointerY,
             this,
           );
 
@@ -9766,11 +9802,53 @@ class App extends React.Component<AppProps, AppState> {
             return;
           }
 
+          // For room elements, apply object snapping to the dragged point.
+          // Skip when Shift is held (discrete-angle mode takes priority).
+          let dragPointerX = pointerCoords.x;
+          let dragPointerY = pointerCoords.y;
+          if (
+            element &&
+            isRoomElement(element) &&
+            !shouldRotateWithDiscreteAngle(event)
+          ) {
+            // Populate the snap cache once per drag, excluding the element
+            // being edited so it doesn't snap to its own segments.
+            if (!SnapCache.getReferenceSnapPoints()) {
+              const refElements = this.scene
+                .getNonDeletedElements()
+                .filter((el) => el.id !== element.id);
+              SnapCache.setReferenceSnapPoints(
+                getReferenceSnapPoints(
+                  refElements,
+                  [],
+                  this.state,
+                  elementsMap,
+                ),
+              );
+            }
+            const refElements = this.scene
+              .getNonDeletedElements()
+              .filter((el) => el.id !== element.id);
+            const { snapOffset, snapLines } = snapLinearElementPoint(
+              { x: pointerCoords.x, y: pointerCoords.y },
+              this,
+              event,
+              elementsMap,
+              refElements,
+            );
+            dragPointerX = pointerCoords.x + snapOffset.x;
+            dragPointerY = pointerCoords.y + snapOffset.y;
+            this.setState((prevState) => {
+              const next = updateStable(prevState.snapLines, snapLines);
+              return prevState.snapLines === next ? null : { snapLines: next };
+            });
+          }
+
           const newState = LinearElementEditor.handlePointDragging(
             event,
             this,
-            pointerCoords.x,
-            pointerCoords.y,
+            dragPointerX,
+            dragPointerY,
             linearElementEditor,
           );
 
