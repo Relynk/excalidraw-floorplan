@@ -24,6 +24,12 @@ export const PORT_TYPES = {
   ELECTRICAL_24V: "electrical-24v",
   SIGNAL_4_20MA: "signal-4-20mA",
   INSTRUMENT_AIR: "instrument-air",
+  /** Air duct connection — supply, return, extract, or exhaust air */
+  DUCT: "duct",
+  /** Heating water circuit (e.g. from boiler or district heating) */
+  HEATING_WATER: "heating-water",
+  /** Chilled water circuit (from chiller or cooling source) */
+  CHILLED_WATER: "chilled-water",
 } as const;
 
 /** A typed connection point on a P&ID symbol */

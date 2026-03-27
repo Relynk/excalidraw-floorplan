@@ -52,15 +52,8 @@ export { PORT_TYPES } from "./types";
 export type { LibraryItem } from "./library";
 export { createLibraryItems, getDefaultPidLibrary } from "./library";
 
-// Symbol definitions
-export {
-  ALL_PID_SYMBOLS,
-  PID_SYMBOLS_BY_CATEGORY,
-  PID_SYMBOLS_BY_ID,
-} from "./symbols/index";
-export * from "./symbols/valves";
-export * from "./symbols/pumps";
-export * from "./symbols/instruments";
+// Symbol definitions — re-export everything (individual symbols + registry)
+export * from "./symbols/index";
 
 // Port resolution
 export {
