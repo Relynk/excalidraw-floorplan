@@ -170,7 +170,7 @@ export const dragSelectedElements = (
   });
 };
 
-const calculateOffset = (
+export const calculateOffset = (
   commonBounds: Bounds,
   dragOffset: { x: number; y: number },
   snapOffset: { x: number; y: number },

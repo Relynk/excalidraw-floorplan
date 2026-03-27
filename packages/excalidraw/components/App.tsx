@@ -229,6 +229,7 @@ import {
   getTransformHandleTypeFromCoords,
   dragNewElement,
   dragSelectedElements,
+  calculateOffset,
   getDragOffsetXY,
   isNonDeletedElement,
   Scene,
@@ -418,6 +419,7 @@ import {
   getReferenceSnapPoints,
   SnapCache,
   isGridModeEnabled,
+  getSnapDistance,
 } from "../snapping";
 import { Renderer } from "../scene/Renderer";
 import type { PidConnectionCustomData } from "../../pid/src/types";
@@ -425,6 +427,7 @@ import {
   getAllResolvedPorts as getAllPidPorts,
   findNearestPort as findNearestPidPort,
 } from "../../pid/src/ports";
+import { updateConnectedPipes } from "../../pid/src/connections";
 import {
   setEraserCursor,
   setCursor,
@@ -5160,6 +5163,7 @@ class App extends React.Component<AppProps, AppState> {
           offsetY = step;
         }
 
+        const selectedElementIds = new Set(selectedElements.map((el) => el.id));
         selectedElements.forEach((element) => {
           this.scene.mutateElement(
             element,
@@ -5173,6 +5177,13 @@ class App extends React.Component<AppProps, AppState> {
           updateBoundElements(element, this.scene, {
             simultaneouslyUpdated: selectedElements,
           });
+          updateConnectedPipes(
+            element,
+            { x: offsetX, y: offsetY },
+            this.scene,
+            selectedElementIds,
+            null, // keyboard move is single-step, no drag-start snapshot needed
+          );
         });
 
         this.scene.triggerUpdate();
@@ -9178,6 +9189,52 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
+      // For pipe-draw: if the click lands on a P&ID port, write the end-port
+      // connection and finalize immediately (single click to complete).
+      if (this.state.activeTool.type === "pipe-draw") {
+        const portSnapDistance = getSnapDistance(this.state.zoom.value) * 2.5;
+        const allElements = this.scene.getNonDeletedElements();
+        const existingPipeType =
+          (multiElement.customData as PidConnectionCustomData | undefined)
+            ?.pidConnection?.pipeType ?? null;
+        const resolvedPorts = getAllPidPorts(allElements, existingPipeType);
+        const endSnap = findNearestPidPort(
+          pointerDownState.origin.x,
+          pointerDownState.origin.y,
+          resolvedPorts,
+          portSnapDistance,
+        );
+        if (endSnap !== null) {
+          const existingConnection = (
+            multiElement.customData as PidConnectionCustomData | undefined
+          )?.pidConnection;
+          this.scene.mutateElement(multiElement, {
+            customData: {
+              ...multiElement.customData,
+              pidConnection: {
+                ...existingConnection,
+                pipeType:
+                  existingConnection?.pipeType ??
+                  endSnap.resolved.port.acceptsTypes[0] ??
+                  "pipe",
+                endPort: {
+                  elementId: endSnap.resolved.ownerElementId,
+                  portId: endSnap.resolved.port.id,
+                },
+              } satisfies PidConnectionCustomData["pidConnection"],
+            },
+          });
+          this.actionManager.executeAction(actionFinalize, "ui", {
+            event: event.nativeEvent,
+            sceneCoords: {
+              x: pointerDownState.origin.x,
+              y: pointerDownState.origin.y,
+            },
+          });
+          return;
+        }
+      }
+
       const { x: rx, y: ry } = multiElement;
       const { lastCommittedPoint } = selectedLinearElement;
 
@@ -10231,6 +10288,26 @@ class App extends React.Component<AppProps, AppState> {
               snapOffset,
               event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
             );
+
+            // Move pipe endpoints that are connected to any dragged P&ID symbol.
+            const adjustedOffset = calculateOffset(
+              getCommonBounds(originalElements),
+              dragOffset,
+              snapOffset,
+              event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
+            );
+            const selectedElementIds = new Set(
+              selectedElements.map((el) => el.id),
+            );
+            for (const element of selectedElements) {
+              updateConnectedPipes(
+                element,
+                adjustedOffset,
+                this.scene,
+                selectedElementIds,
+                pointerDownState.originalElements,
+              );
+            }
           }
 
           this.setState({

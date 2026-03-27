@@ -1396,6 +1396,44 @@ export const getSnapLinesAtPointer = (
 
   const snapDistance = getSnapDistance(app.state.zoom.value);
 
+  // --- Port snapping: highest priority (both axes locked to port position) ---
+  // Must mirror the same priority and multiplier used in snapLinearElementPoint
+  // so the pre-draw hover indicator and the live drawing snap are consistent.
+  const PORT_SNAP_MULTIPLIER = 2.5;
+  const portSnapDistance = snapDistance * PORT_SNAP_MULTIPLIER;
+  const resolvedPorts = getAllResolvedPorts(referenceElements, null);
+  const nearestPort = findNearestPort(
+    pointer.x,
+    pointer.y,
+    resolvedPorts,
+    portSnapDistance,
+  );
+  if (nearestPort !== null) {
+    const { x: px, y: py } = nearestPort.resolved;
+    const portPoint = pointFrom<GlobalPoint>(px, py);
+    return {
+      originOffset: { x: px - pointer.x, y: py - pointer.y },
+      snapLines: [
+        {
+          type: "pointer" as const,
+          points: [portPoint, pointFrom(px, pointer.y)] as [
+            GlobalPoint,
+            GlobalPoint,
+          ],
+          direction: "vertical" as const,
+        },
+        {
+          type: "pointer" as const,
+          points: [portPoint, pointFrom(pointer.x, py)] as [
+            GlobalPoint,
+            GlobalPoint,
+          ],
+          direction: "horizontal" as const,
+        },
+      ],
+    };
+  }
+
   const minOffset = {
     x: snapDistance,
     y: snapDistance,

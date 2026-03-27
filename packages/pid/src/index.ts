@@ -64,3 +64,6 @@ export {
 // State engine
 export type { VariableValues, PidSceneApi } from "./state-engine";
 export { applyPidState, setSymbolBindings } from "./state-engine";
+
+// Connection tracking
+export { updateConnectedPipes } from "./connections";
