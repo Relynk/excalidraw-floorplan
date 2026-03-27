@@ -11,10 +11,7 @@
  * The state engine is completely data-source agnostic — the host app is
  * responsible for obtaining variable values and calling applyPidState.
  */
-import type {
-  ExcalidrawElement,
-  ExcalidrawTextElement,
-} from "@excalidraw/element/types";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 import { syncInvalidIndices } from "@excalidraw/element";
 
 import type {
@@ -22,9 +19,13 @@ import type {
   BindableProperty,
   PidSymbolCustomData,
   PidElementCustomData,
+  PidStateRule,
+  PidVisualProps,
+  PidSymbolContext,
 } from "./types";
 
 import { isPidSymbolElement } from "./ports";
+import { PID_SYMBOLS_BY_ID } from "./symbols/index";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -44,43 +45,25 @@ export interface PidSceneApi {
 }
 
 // ---------------------------------------------------------------------------
-// Mapping resolution
+// Mapping resolution (used by legacy stateRules path)
 // ---------------------------------------------------------------------------
 
-/**
- * Resolve a binding's mapping to a concrete property value for a given
- * variable value.
- *
- * - Exact string match wins first.
- * - "*" is the wildcard/default. In text mappings, "${value}" is interpolated.
- * - Returns undefined if no mapping applies.
- */
 function resolveMapping(
   mapping: Record<string, string | number | boolean>,
   value: string | number | boolean,
 ): string | number | boolean | undefined {
   const strValue = String(value);
-
-  if (strValue in mapping) {
-    return mapping[strValue];
-  }
-
+  if (strValue in mapping) return mapping[strValue];
   if ("*" in mapping) {
-    const template = String(mapping["*"]);
-    return template.replace(/\$\{value\}/g, strValue);
+    return String(mapping["*"]).replace(/\$\{value\}/g, strValue);
   }
-
   return undefined;
 }
 
 // ---------------------------------------------------------------------------
-// Element lookup helpers
+// Element lookup
 // ---------------------------------------------------------------------------
 
-/**
- * Find the sub-element within a symbol group that matches a given role.
- * Returns the first match (roles should be unique within a symbol).
- */
 function findElementByRole(
   allElements: readonly ExcalidrawElement[],
   rootId: string,
@@ -93,54 +76,152 @@ function findElementByRole(
 }
 
 // ---------------------------------------------------------------------------
-// Partial update builder
+// Update accumulator
 // ---------------------------------------------------------------------------
 
-// Use a plain record to avoid readonly conflicts with Partial<ExcalidrawElement>
 type ElementUpdate = Record<string, unknown>;
 
-function buildPropertyUpdate(
-  property: BindableProperty,
-  resolvedValue: string | number | boolean,
-  existingElement: ExcalidrawElement,
-): ElementUpdate {
-  switch (property) {
-    case "strokeColor":
-      return { strokeColor: String(resolvedValue) };
+function mergeUpdate(
+  updates: Map<string, ElementUpdate>,
+  targetId: string,
+  patch: ElementUpdate,
+): void {
+  const existing = updates.get(targetId) ?? {};
 
-    case "backgroundColor":
-      return { backgroundColor: String(resolvedValue) };
+  const mergedCustomData =
+    patch["customData"] !== undefined || existing["customData"] !== undefined
+      ? {
+          ...((existing["customData"] as Record<string, unknown>) ?? {}),
+          ...((patch["customData"] as Record<string, unknown>) ?? {}),
+        }
+      : undefined;
 
-    case "opacity": {
-      const num = Number(resolvedValue);
-      return {
-        opacity: Number.isFinite(num)
+  const merged: ElementUpdate = { ...existing, ...patch };
+  if (mergedCustomData !== undefined) {
+    merged["customData"] = mergedCustomData;
+  }
+  updates.set(targetId, merged);
+}
+
+// ---------------------------------------------------------------------------
+// Symbol context — passed to stateRenderer functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a PidSymbolContext scoped to one placed symbol instance.
+ * All update() / set() calls accumulate into the shared `updates` map and
+ * are applied in a single batch by the state engine.
+ */
+function createSymbolContext(
+  rootId: string,
+  allElements: readonly ExcalidrawElement[],
+  updates: Map<string, ElementUpdate>,
+): PidSymbolContext {
+  function update(role: string, props: PidVisualProps): void {
+    const el = findElementByRole(allElements, rootId, role);
+    if (!el) return;
+
+    const patch: ElementUpdate = {};
+
+    if (props.strokeColor !== undefined) {
+      patch.strokeColor = props.strokeColor;
+    }
+    if (props.backgroundColor !== undefined) {
+      patch.backgroundColor = props.backgroundColor;
+    }
+    if (props.opacity !== undefined) {
+      patch.opacity = Math.max(0, Math.min(100, props.opacity));
+    }
+    if (props.visible !== undefined) {
+      // Must preserve the element's existing customData (pidElementRole, pidRootId, etc.)
+      // so we start from the element's own customData and overlay the hidden flag.
+      patch.customData = {
+        ...((el.customData as Record<string, unknown>) ?? {}),
+        pidHidden: !props.visible,
+      };
+    }
+    if (props.text !== undefined) {
+      if (el.type === "text") {
+        patch.text = props.text;
+        patch.originalText = props.text;
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      mergeUpdate(updates, el.id, patch);
+    }
+  }
+
+  function set(
+    role: string,
+    property: keyof PidVisualProps,
+    value: string | number | boolean,
+  ): void {
+    update(role, { [property]: value } as PidVisualProps);
+  }
+
+  return { update, set };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy stateRules path
+// ---------------------------------------------------------------------------
+
+function applyStateRules(
+  rules: PidStateRule[],
+  inputId: string,
+  value: string | number | boolean,
+  rootId: string,
+  allElements: readonly ExcalidrawElement[],
+  updates: Map<string, ElementUpdate>,
+): void {
+  for (const rule of rules) {
+    if (rule.inputId !== inputId) continue;
+
+    const resolvedValue = resolveMapping(rule.mapping, value);
+    if (resolvedValue === undefined) continue;
+
+    const targetEl = findElementByRole(
+      allElements,
+      rootId,
+      rule.targetElementRole,
+    );
+    if (!targetEl) continue;
+
+    // Build the property patch the same way as the old buildPropertyUpdate
+    const patch: ElementUpdate = {};
+    switch (rule.property) {
+      case "strokeColor":
+        patch.strokeColor = String(resolvedValue);
+        break;
+      case "backgroundColor":
+        patch.backgroundColor = String(resolvedValue);
+        break;
+      case "opacity": {
+        const num = Number(resolvedValue);
+        patch.opacity = Number.isFinite(num)
           ? Math.max(0, Math.min(100, num))
-          : existingElement.opacity,
-      };
-    }
-
-    case "visible":
-      // We use pidHidden in customData which is checked in renderElement.ts
-      return {
-        customData: {
-          ...(existingElement.customData ?? {}),
+          : targetEl.opacity;
+        break;
+      }
+      case "visible":
+        patch.customData = {
+          ...((targetEl.customData as Record<string, unknown>) ?? {}),
           pidHidden: !resolvedValue,
-        },
-      };
-
-    case "text": {
-      const textVal = String(resolvedValue);
-      // Only applicable to text elements
-      if (existingElement.type !== "text") return {};
-      return {
-        text: textVal,
-        originalText: textVal,
-      };
+        };
+        break;
+      case "text":
+        if (targetEl.type === "text") {
+          const t = String(resolvedValue);
+          patch.text = t;
+          patch.originalText = t;
+        }
+        break;
     }
 
-    default:
-      return {};
+    if (Object.keys(patch).length > 0) {
+      mergeUpdate(updates, targetEl.id, patch);
+    }
   }
 }
 
@@ -152,7 +233,17 @@ function buildPropertyUpdate(
  * Apply a batch of variable values to all P&ID symbols in the scene.
  *
  * Call this whenever new data arrives from your external system.
- * The function performs a single batched updateScene() call.
+ * A single batched updateScene() call is made regardless of how many
+ * symbols or bindings are updated.
+ *
+ * **Resolution order for each symbol:**
+ * 1. If the symbol definition has a `stateRenderer` function:
+ *    - Builds an `inputs` object from all inputId-based bindings.
+ *    - Calls `stateRenderer(inputs, ctx)` — the function decides what to update.
+ * 2. Else if the symbol definition has `stateRules`:
+ *    - Evaluates each rule's mapping for matching inputId bindings.
+ * 3. Direct bindings (with `targetElementRole`/`property`/`mapping`) are always
+ *    applied as per-instance overrides, regardless of the above.
  *
  * @param variableValues  Map of variableId → current value.
  * @param api             ExcalidrawImperativeAPI (or compatible object).
@@ -162,8 +253,6 @@ export function applyPidState(
   api: PidSceneApi,
 ): void {
   const allElements = api.getSceneElements();
-
-  // Collect updates: elementId → plain property-update record
   const updates = new Map<string, ElementUpdate>();
 
   for (const element of allElements) {
@@ -171,17 +260,64 @@ export function applyPidState(
 
     const symbolData = element.customData as PidSymbolCustomData;
     const bindings: VariableBinding[] = symbolData.bindings ?? [];
-
     if (bindings.length === 0) continue;
 
+    const symbolDef = PID_SYMBOLS_BY_ID.get(symbolData.symbolId);
+
+    // -----------------------------------------------------------------------
+    // stateRenderer path: build inputs map, call the renderer function once
+    // -----------------------------------------------------------------------
+    if (symbolDef?.stateRenderer) {
+      // Collect all inputId-based bindings into a single inputs object
+      const inputs: Record<string, string | number | boolean | undefined> = {};
+      for (const binding of bindings) {
+        if ("inputId" in binding) {
+          inputs[binding.inputId] = variableValues[binding.variableId];
+        }
+      }
+
+      // Only invoke if at least one bound input has a value in the update batch
+      const hasAnyValue = Object.values(inputs).some((v) => v !== undefined);
+      if (hasAnyValue) {
+        const ctx = createSymbolContext(element.id, allElements, updates);
+        try {
+          symbolDef.stateRenderer(inputs, ctx);
+        } catch (_err) {
+          // A renderer error must never crash the whole state update loop.
+          // In dev mode you'd add a console.error here for diagnostics.
+        }
+      }
+    } else if (symbolDef?.stateRules) {
+      // -----------------------------------------------------------------------
+      // Legacy stateRules path (fallback when no stateRenderer is defined)
+      // -----------------------------------------------------------------------
+      for (const binding of bindings) {
+        if (!("inputId" in binding)) continue;
+        const value = variableValues[binding.variableId];
+        if (value === undefined) continue;
+        applyStateRules(
+          symbolDef.stateRules,
+          binding.inputId,
+          value,
+          element.id,
+          allElements,
+          updates,
+        );
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Direct bindings: per-instance overrides, always applied
+    // -----------------------------------------------------------------------
     for (const binding of bindings) {
+      if ("inputId" in binding) continue; // handled above
+
       const value = variableValues[binding.variableId];
       if (value === undefined) continue;
 
       const resolvedValue = resolveMapping(binding.mapping, value);
       if (resolvedValue === undefined) continue;
 
-      // Find the target element by role within this symbol group
       const targetEl = findElementByRole(
         allElements,
         element.id,
@@ -189,30 +325,13 @@ export function applyPidState(
       );
       if (!targetEl) continue;
 
-      const existing = updates.get(targetEl.id) ?? {};
-      const propertyUpdate = buildPropertyUpdate(
-        binding.property,
+      // Reuse the context's update logic via a one-off context
+      const ctx = createSymbolContext(element.id, allElements, updates);
+      ctx.set(
+        binding.targetElementRole,
+        binding.property as keyof PidVisualProps,
         resolvedValue,
-        targetEl,
       );
-
-      // Merge customData objects if both have them
-      const mergedCustomData =
-        propertyUpdate["customData"] !== undefined ||
-        existing["customData"] !== undefined
-          ? {
-              ...((existing["customData"] as Record<string, unknown>) ?? {}),
-              ...((propertyUpdate["customData"] as Record<string, unknown>) ??
-                {}),
-            }
-          : undefined;
-
-      const merged: ElementUpdate = { ...existing, ...propertyUpdate };
-      if (mergedCustomData !== undefined) {
-        merged["customData"] = mergedCustomData;
-      }
-
-      updates.set(targetEl.id, merged);
     }
   }
 
@@ -222,19 +341,15 @@ export function applyPidState(
   const updatedElements = allElements.map((el) => {
     const update = updates.get(el.id);
     if (!update) return el;
-    // ExcalidrawElement properties are Readonly<>, so we spread to build a new object
-    const updated: ExcalidrawElement = {
+    return {
       ...el,
       ...update,
       version: el.version + 1,
       versionNonce: Math.floor(Math.random() * 2 ** 31),
       updated: now,
     } as ExcalidrawElement;
-    return updated;
   });
 
-  // syncInvalidIndices ensures fractional indices remain strictly ordered after
-  // spreads, which is validated (and throws in dev) by Scene.replaceAllElements.
   api.updateScene({ elements: syncInvalidIndices(updatedElements) });
 }
 
@@ -243,10 +358,11 @@ export function applyPidState(
  * Returns the updated elements array (does not call updateScene — caller does).
  *
  * @example
+ * // Input-based binding (preferred — symbol's stateRenderer handles visuals)
  * const updated = setSymbolBindings(
  *   api.getSceneElements(),
  *   symbolElementId,
- *   [{ variableId: "pump_01.status", targetElementRole: "indicator", ... }],
+ *   [{ variableId: "pump_01.status", inputId: "status" }],
  * );
  * api.updateScene({ elements: updated });
  */
@@ -259,13 +375,9 @@ export function setSymbolBindings(
   return allElements.map((el) => {
     if (el.id !== symbolElementId) return el;
     if (!isPidSymbolElement(el)) return el;
-
     return {
       ...el,
-      customData: {
-        ...el.customData,
-        bindings,
-      },
+      customData: { ...el.customData, bindings },
       version: el.version + 1,
       versionNonce: Math.floor(Math.random() * 2 ** 31),
       updated: now,

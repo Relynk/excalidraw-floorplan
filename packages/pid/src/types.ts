@@ -116,6 +116,195 @@ export interface PidSymbolDefinition {
   elements: PidElementTemplate[];
   /** Typed connection points */
   ports: PidPort[];
+  /**
+   * Named input slots that this symbol accepts.
+   * Callers bind external variables to these inputs by name.
+   * Defined alongside the symbol so callers don't need knowledge of internal roles.
+   */
+  inputs?: PidSymbolInput[];
+  /**
+   * JavaScript renderer function that maps input values to visual updates.
+   * Called by the state engine whenever bound variable values change.
+   *
+   * Takes priority over stateRules when both are defined.
+   * Use this for any logic that benefits from conditionals, arithmetic, or
+   * updating multiple sub-elements together.
+   *
+   * @see PidStateRenderer
+   */
+  stateRenderer?: PidStateRenderer;
+
+  /**
+   * Declarative fallback for simple value→property mappings.
+   * Used when stateRenderer is absent.
+   * @deprecated Prefer stateRenderer for new symbols.
+   */
+  stateRules?: PidStateRule[];
+}
+
+// ---------------------------------------------------------------------------
+// Symbol inputs and state renderer (symbol-internal logic)
+// ---------------------------------------------------------------------------
+
+/**
+ * Declares a named input slot on a P&ID symbol.
+ * Inputs describe what external data a symbol can accept, without coupling
+ * the symbol definition to specific variable IDs or external systems.
+ *
+ * @example
+ * { id: "status", label: "Equipment Status", type: "discrete",
+ *   allowedValues: ["running", "stopped", "fault"], defaultValue: "stopped" }
+ */
+export interface PidSymbolInput {
+  /** Unique within this symbol, e.g. "status", "value", "setpoint" */
+  id: string;
+  /** Human-readable label for UI, e.g. "Equipment Status" */
+  label: string;
+  /** Data type hint for validation and UI rendering */
+  type: "discrete" | "numeric" | "text";
+  /** For discrete inputs: the set of accepted values (for UI and validation) */
+  allowedValues?: string[];
+  /** Default visual state when no external variable is bound */
+  defaultValue?: string | number | boolean;
+}
+
+/**
+ * Visual properties that can be updated on a symbol sub-element by a renderer.
+ * Pass a subset — only specified properties are changed; the rest are untouched.
+ */
+export interface PidVisualProps {
+  /** CSS colour string, e.g. "#22c55e" or "transparent" */
+  strokeColor?: string;
+  /** CSS colour string */
+  backgroundColor?: string;
+  /** 0 (transparent) – 100 (fully opaque) */
+  opacity?: number;
+  /** false = hidden (not rendered), true = visible */
+  visible?: boolean;
+  /** Replaces the text content; only effective on text elements */
+  text?: string;
+}
+
+/**
+ * Context object passed to a symbol's stateRenderer.
+ * Provides typed helpers for updating sub-element visuals by role name.
+ */
+export interface PidSymbolContext {
+  /**
+   * Update one or more visual properties on the sub-element with the given role.
+   * Only provided properties are changed; others are left untouched.
+   *
+   * @example
+   * ctx.update('indicator', { backgroundColor: '#22c55e', opacity: 100 });
+   */
+  update(role: string, props: PidVisualProps): void;
+
+  /**
+   * Shorthand for updating a single property.
+   * Equivalent to ctx.update(role, { [property]: value }).
+   *
+   * @example
+   * ctx.set('body-left', 'strokeColor', '#22c55e');
+   */
+  set(
+    role: string,
+    property: keyof PidVisualProps,
+    value: string | number | boolean,
+  ): void;
+}
+
+/**
+ * A JavaScript function that maps current input values to visual updates on
+ * the symbol's sub-elements. Called by the state engine whenever any bound
+ * variable changes.
+ *
+ * The function is called with all input values resolved from the bound
+ * variables. Inputs not bound to any variable arrive as `undefined`; the
+ * renderer can choose to skip, reset, or handle them.
+ *
+ * @example
+ * // Pump: colour-code the indicator by equipment status
+ * stateRenderer(inputs, ctx) {
+ *   const color =
+ *     inputs.status === 'running' ? '#22c55e' :
+ *     inputs.status === 'fault'   ? '#ef4444' : '#94a3b8';
+ *   ctx.set('indicator', 'backgroundColor', color);
+ * }
+ *
+ * @example
+ * // Gate valve: same colour applied to both body triangles
+ * stateRenderer(inputs, ctx) {
+ *   const color = inputs.status === 'open' ? '#22c55e' : '#ef4444';
+ *   ctx.update('body-left',  { strokeColor: color });
+ *   ctx.update('body-right', { strokeColor: color });
+ * }
+ *
+ * @example
+ * // Temperature transmitter: formatted value text + alarm highlight
+ * stateRenderer(inputs, ctx) {
+ *   const val = inputs.value;
+ *   if (val === undefined) return;
+ *   ctx.set('value', 'text', `${val} °C`);
+ *   ctx.update('body', { strokeColor: Number(val) > 80 ? '#ef4444' : '#1e1e1e' });
+ * }
+ */
+export type PidStateRenderer = (
+  inputs: Record<string, string | number | boolean | undefined>,
+  ctx: PidSymbolContext,
+) => void;
+
+/**
+ * Maps an input value to a visual property change on a specific sub-element.
+ * @deprecated Prefer stateRenderer for new symbols. stateRules remain
+ *             supported as a fallback when stateRenderer is absent.
+ */
+export interface PidStateRule {
+  /** References PidSymbolInput.id on this symbol */
+  inputId: string;
+  /**
+   * Role of the target sub-element.
+   * A single inputId can have multiple rules targeting different sub-elements.
+   */
+  targetElementRole: string;
+  property: BindableProperty;
+  /**
+   * Maps input values (as strings) to property values.
+   * - Exact key match takes priority.
+   * - "*" is a wildcard/default. For text properties, "${value}" is interpolated.
+   */
+  mapping: Record<string, string | number | boolean>;
+}
+
+/**
+ * Maps an input value to a visual property change on a specific sub-element.
+ * State rules are part of the symbol definition — they encode the symbol's
+ * internal display logic so callers don't need to know about roles or mappings.
+ *
+ * @example
+ * // Pump running/stopped/fault → indicator color
+ * { inputId: "status", targetElementRole: "indicator", property: "backgroundColor",
+ *   mapping: { running: "#22c55e", stopped: "#94a3b8", fault: "#ef4444" } }
+ *
+ * @example
+ * // Numeric value → formatted text
+ * { inputId: "value", targetElementRole: "value", property: "text",
+ *   mapping: { "*": "${value} °C" } }
+ */
+export interface PidStateRule {
+  /** References PidSymbolInput.id on this symbol */
+  inputId: string;
+  /**
+   * Role string matching PidElementTemplate.role on the target sub-element.
+   * A single inputId can have multiple rules targeting different sub-elements.
+   */
+  targetElementRole: string;
+  property: BindableProperty;
+  /**
+   * Maps input values (as strings) to property values.
+   * - Exact key match takes priority.
+   * - "*" is a wildcard/default. For text properties, "${value}" is interpolated.
+   */
+  mapping: Record<string, string | number | boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,44 +320,54 @@ export type BindableProperty =
   | "text";
 
 /**
- * Maps an external variable to a visual property change on a specific element
- * within a placed symbol.
+ * Connects an external variable to a symbol input (preferred) or directly
+ * targets a sub-element (legacy/custom override).
+ *
+ * **Preferred: input-based binding**
+ * Binds a variable to a named input slot defined on the symbol. The state
+ * engine resolves the visual changes automatically using the symbol's
+ * stateRules — the caller only needs to know the input name, not internal
+ * roles or mappings.
  *
  * @example
- * // Discrete state → color mapping
- * {
- *   variableId: "pump_01.status",
- *   targetElementRole: "indicator",
+ * { variableId: "pump_01.status", inputId: "status" }
+ *
+ * **Legacy: direct element targeting**
+ * Directly specifies the target role, property, and mapping. Use this for
+ * custom per-instance overrides or when working with symbols that have no
+ * stateRules defined.
+ *
+ * @example
+ * { variableId: "pump_01.status", targetElementRole: "indicator",
  *   property: "backgroundColor",
- *   mapping: { running: "#22c55e", stopped: "#ef4444", fault: "#f97316" }
- * }
- *
- * @example
- * // Numeric value → text display
- * {
- *   variableId: "tag_TT_01.value",
- *   targetElementRole: "value",
- *   property: "text",
- *   mapping: { "*": "${value} °C" }
- * }
+ *   mapping: { running: "#22c55e", stopped: "#ef4444" } }
  */
-export interface VariableBinding {
-  /** The external variable identifier (e.g. OPC-UA node ID, tag name) */
-  variableId: string;
-  /**
-   * Role string matching PidElementTemplate.role on the target sub-element.
-   * Used to find the target element within the symbol group on the canvas.
-   */
-  targetElementRole: string;
-  property: BindableProperty;
-  /**
-   * Maps variable values (as strings) to property values.
-   * - Exact key match takes priority.
-   * - "*" is a wildcard/default. For text properties, "${value}" in the
-   *   mapped string is replaced with the actual value.
-   */
-  mapping: Record<string, string | number | boolean>;
-}
+export type VariableBinding =
+  | {
+      /** The external variable identifier (e.g. OPC-UA node ID, tag name) */
+      variableId: string;
+      /**
+       * References PidSymbolInput.id on the symbol definition.
+       * The state engine looks up matching stateRules to drive visual changes.
+       */
+      inputId: string;
+    }
+  | {
+      variableId: string;
+      /**
+       * Role string matching PidElementTemplate.role on the target sub-element.
+       * Used to find the target element within the symbol group on the canvas.
+       */
+      targetElementRole: string;
+      property: BindableProperty;
+      /**
+       * Maps variable values (as strings) to property values.
+       * - Exact key match takes priority.
+       * - "*" is a wildcard/default. For text properties, "${value}" in the
+       *   mapped string is replaced with the actual value.
+       */
+      mapping: Record<string, string | number | boolean>;
+    };
 
 // ---------------------------------------------------------------------------
 // customData schemas for placed canvas elements

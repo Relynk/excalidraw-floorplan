@@ -52,3 +52,8 @@ export const PID_SYMBOLS_BY_CATEGORY = ALL_PID_SYMBOLS.reduce<
   acc[sym.category].push(sym);
   return acc;
 }, {});
+
+/** Fast lookup of symbol definitions by id — used by the state engine */
+export const PID_SYMBOLS_BY_ID = new Map<string, PidSymbolDefinition>(
+  ALL_PID_SYMBOLS.map((s) => [s.id, s]),
+);

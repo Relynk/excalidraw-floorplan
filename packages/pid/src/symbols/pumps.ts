@@ -88,6 +88,24 @@ export const centrifugalPump: PidSymbolDefinition = {
       direction: "out",
     },
   ],
+  inputs: [
+    {
+      id: "status",
+      label: "Equipment Status",
+      type: "discrete",
+      allowedValues: ["running", "stopped", "fault"],
+      defaultValue: "stopped",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const color =
+      inputs.status === "running"
+        ? "#22c55e"
+        : inputs.status === "fault"
+        ? "#ef4444"
+        : "#94a3b8";
+    ctx.set("indicator", "backgroundColor", color);
+  },
 };
 
 /**
@@ -175,6 +193,24 @@ export const positivePump: PidSymbolDefinition = {
       direction: "out",
     },
   ],
+  inputs: [
+    {
+      id: "status",
+      label: "Equipment Status",
+      type: "discrete",
+      allowedValues: ["running", "stopped", "fault"],
+      defaultValue: "stopped",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const color =
+      inputs.status === "running"
+        ? "#22c55e"
+        : inputs.status === "fault"
+        ? "#ef4444"
+        : "#94a3b8";
+    ctx.set("indicator", "backgroundColor", color);
+  },
 };
 
 /**
@@ -260,4 +296,22 @@ export const compressor: PidSymbolDefinition = {
       direction: "out",
     },
   ],
+  inputs: [
+    {
+      id: "status",
+      label: "Equipment Status",
+      type: "discrete",
+      allowedValues: ["running", "stopped", "fault"],
+      defaultValue: "stopped",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const color =
+      inputs.status === "running"
+        ? "#22c55e"
+        : inputs.status === "fault"
+        ? "#ef4444"
+        : "#94a3b8";
+    ctx.set("indicator", "backgroundColor", color);
+  },
 };

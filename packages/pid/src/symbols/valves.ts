@@ -107,6 +107,20 @@ export const gateValve: PidSymbolDefinition = {
       direction: "out",
     },
   ],
+  inputs: [
+    {
+      id: "status",
+      label: "Valve Position",
+      type: "discrete",
+      allowedValues: ["open", "closed"],
+      defaultValue: "closed",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const color = inputs.status === "open" ? "#22c55e" : "#ef4444";
+    ctx.update("body-left", { strokeColor: color });
+    ctx.update("body-right", { strokeColor: color });
+  },
 };
 
 /**
@@ -183,6 +197,20 @@ export const ballValve: PidSymbolDefinition = {
       direction: "out",
     },
   ],
+  inputs: [
+    {
+      id: "status",
+      label: "Valve Position",
+      type: "discrete",
+      allowedValues: ["open", "closed"],
+      defaultValue: "closed",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const color = inputs.status === "open" ? "#22c55e" : "#ef4444";
+    ctx.update("body", { strokeColor: color });
+    ctx.update("indicator", { strokeColor: color });
+  },
 };
 
 /**
@@ -368,6 +396,21 @@ export const controlValve: PidSymbolDefinition = {
       direction: "in",
     },
   ],
+  inputs: [
+    {
+      id: "status",
+      label: "Valve Position",
+      type: "discrete",
+      allowedValues: ["open", "closed"],
+      defaultValue: "closed",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const strokeColor = inputs.status === "open" ? "#22c55e" : "#ef4444";
+    ctx.update("body-left", { strokeColor });
+    ctx.update("body-right", { strokeColor });
+    ctx.update("indicator", { backgroundColor: strokeColor });
+  },
 };
 
 /**

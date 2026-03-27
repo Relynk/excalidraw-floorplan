@@ -104,6 +104,19 @@ function makeTransmitterSymbol(
         direction: "out",
       },
     ],
+    inputs: [
+      {
+        id: "value",
+        label: "Process Value",
+        type: "numeric",
+        defaultValue: `-- ${valueUnit}`,
+      },
+    ],
+    stateRenderer(inputs, ctx) {
+      const val = inputs.value;
+      if (val === undefined) return;
+      ctx.set("value", "text", `${val} ${valueUnit}`);
+    },
   };
 }
 
@@ -211,4 +224,17 @@ export const dcsIndicator: import("../types").PidSymbolDefinition = {
       direction: "in",
     },
   ],
+  inputs: [
+    {
+      id: "value",
+      label: "Display Value",
+      type: "numeric",
+      defaultValue: "--",
+    },
+  ],
+  stateRenderer(inputs, ctx) {
+    const val = inputs.value;
+    if (val === undefined) return;
+    ctx.set("tag-number", "text", String(val));
+  },
 };
