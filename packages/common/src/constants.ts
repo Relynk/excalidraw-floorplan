@@ -463,6 +463,8 @@ export const TOOL_TYPE = {
   laser: "laser",
   // Relynk room tools
   "room-freedraw": "room-freedraw",
+  // Relynk P&ID pipe tool
+  "pipe-draw": "pipe-draw",
 } as const;
 
 export const EDITOR_LS_KEYS = {

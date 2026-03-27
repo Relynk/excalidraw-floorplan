@@ -14,6 +14,7 @@ import {
   laserPointerToolIcon,
   handIcon,
   RoomFreedrawIcon,
+  PipeDrawIcon,
 } from "./icons";
 
 import type { AppClassProperties } from "../types";
@@ -124,6 +125,16 @@ export const SHAPES = [
     fillable: false,
     toolbar: true,
     label: "Room: Free draw",
+  },
+  // Relynk P&ID pipe tool
+  {
+    icon: PipeDrawIcon,
+    value: "pipe-draw",
+    key: null,
+    numericKey: null,
+    fillable: false,
+    toolbar: true,
+    label: "Pipe",
   },
 ] as const;
 

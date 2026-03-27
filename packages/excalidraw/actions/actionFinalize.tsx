@@ -28,6 +28,8 @@ import { isInvisiblySmallElement } from "@excalidraw/element";
 import { CaptureUpdateAction } from "@excalidraw/element";
 
 import type { GlobalPoint, LocalPoint } from "@excalidraw/math";
+import { getAllResolvedPorts, findNearestPort } from "../../pid/src/ports";
+import type { PidConnectionCustomData } from "../../pid/src/types";
 import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
@@ -239,10 +241,14 @@ export const actionFinalize = register<FormData>({
       }
 
       if (isLinearElement(element) || isFreeDrawElement(element)) {
+        // Pipe elements are always open lines — never close them into polygons.
+        const isPipe = typeof element.customData?.pipeTool === "string";
+
         // If the multi point line closes the loop,
         // set the last point to first point.
         // This ensures that loop remains closed at different scales.
-        const isLoop = isPathALoop(element.points, appState.zoom.value);
+        const isLoop =
+          !isPipe && isPathALoop(element.points, appState.zoom.value);
 
         if (isLoop && (isLineElement(element) || isFreeDrawElement(element))) {
           const linePoints = element.points;
@@ -264,10 +270,67 @@ export const actionFinalize = register<FormData>({
           }
         }
 
-        if (isLineElement(element) && !isValidPolygon(element.points)) {
+        if (
+          isLineElement(element) &&
+          (!isValidPolygon(element.points) || isPipe)
+        ) {
           scene.mutateElement(element, {
             polygon: false,
           });
+        }
+
+        // For pipe elements, detect whether the last point landed on a port and
+        // write the endPort connection metadata.
+        if (isPipe && isLineElement(element) && element.points.length >= 2) {
+          const snapDistance = 8 / appState.zoom.value;
+          const lastLocal = element.points[element.points.length - 1]!;
+          const endGlobalX = element.x + lastLocal[0];
+          const endGlobalY = element.y + lastLocal[1];
+          const allElements = scene.getNonDeletedElements();
+          const existingPipeType =
+            (element.customData as PidConnectionCustomData | undefined)
+              ?.pidConnection?.pipeType ?? null;
+          const resolvedPorts = getAllResolvedPorts(
+            allElements,
+            existingPipeType,
+          );
+          const existingStartPort = (
+            element.customData as PidConnectionCustomData | undefined
+          )?.pidConnection?.startPort;
+          const candidatePorts = resolvedPorts.filter(
+            (rp) =>
+              !(
+                rp.ownerElementId === existingStartPort?.elementId &&
+                rp.port.id === existingStartPort.portId
+              ),
+          );
+          const endSnap = findNearestPort(
+            endGlobalX,
+            endGlobalY,
+            candidatePorts,
+            snapDistance,
+          );
+          if (endSnap !== null) {
+            const existing = (
+              element.customData as PidConnectionCustomData | undefined
+            )?.pidConnection;
+            scene.mutateElement(element, {
+              customData: {
+                ...element.customData,
+                pidConnection: {
+                  ...existing,
+                  endPort: {
+                    elementId: endSnap.resolved.ownerElementId,
+                    portId: endSnap.resolved.port.id,
+                  },
+                  pipeType:
+                    existing?.pipeType ??
+                    endSnap.resolved.port.acceptsTypes[0] ??
+                    "pipe",
+                } satisfies PidConnectionCustomData["pidConnection"],
+              },
+            });
+          }
         }
       }
     }

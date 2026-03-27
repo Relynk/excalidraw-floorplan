@@ -327,6 +327,7 @@
     "laser": "Laser pointer",
     "hand": "Hand (panning tool)",
     "room-freedraw": "Room: Free draw",
+    "pipe-draw": "Pipe",
     "extraTools": "More tools",
     "mermaidToExcalidraw": "Mermaid to Excalidraw",
     "convertElementType": "Toggle shape type"

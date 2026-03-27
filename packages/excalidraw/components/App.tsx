@@ -331,6 +331,11 @@ import {
   actionChangeRoomName,
   isRoomElement,
 } from "../actions/actionRoomProperties";
+
+/** Identifies elements drawn with the pipe-draw tool (open P&ID pipe lines). */
+const isPipeElement = (
+  el: import("@excalidraw/element/types").ExcalidrawElement,
+) => typeof el.customData?.pipeTool === "string";
 import { actionPaste } from "../actions/actionClipboard";
 import { actionCopyElementLink } from "../actions/actionElementLink";
 import { actionUnlockAllElements } from "../actions/actionElementLock";
@@ -415,6 +420,11 @@ import {
   isGridModeEnabled,
 } from "../snapping";
 import { Renderer } from "../scene/Renderer";
+import type { PidConnectionCustomData } from "../../pid/src/types";
+import {
+  getAllResolvedPorts as getAllPidPorts,
+  findNearestPort as findNearestPidPort,
+} from "../../pid/src/ports";
 import {
   setEraserCursor,
   setCursor,
@@ -6856,7 +6866,10 @@ class App extends React.Component<AppProps, AppState> {
           this.state.selectedLinearElement.elementId,
           this.scene.getNonDeletedElementsMap(),
         );
-        if (editingEl && isRoomElement(editingEl)) {
+        if (
+          editingEl &&
+          (isRoomElement(editingEl) || isPipeElement(editingEl))
+        ) {
           const refElements = this.scene
             .getNonDeletedElements()
             .filter((el) => el.id !== editingEl.id);
@@ -6866,6 +6879,7 @@ class App extends React.Component<AppProps, AppState> {
             event,
             this.scene.getNonDeletedElementsMap(),
             refElements,
+            editingEl.customData?.pidConnection?.pipeType ?? null,
           );
           editModePointerX = scenePointerX + snapOffset.x;
           editModePointerY = scenePointerY + snapOffset.y;
@@ -6971,12 +6985,22 @@ class App extends React.Component<AppProps, AppState> {
             ),
           );
         }
-        const { snapOffset, snapLines } = snapLinearElementPoint(
+        // Determine the pipe type for the line being drawn, if any.
+        // This ensures typed lines only snap to compatible ports.
+        const drawingPipeType =
+          (multiElement.customData as PidConnectionCustomData | undefined)
+            ?.pidConnection?.pipeType ?? null;
+        const {
+          snapOffset,
+          snapLines,
+          snappedPort: drawingSnappedPort,
+        } = snapLinearElementPoint(
           { x: scenePointerX, y: scenePointerY },
           this,
           event,
           elementsMap,
           referenceElements,
+          drawingPipeType,
         );
         snappedPointerX = scenePointerX + snapOffset.x;
         snappedPointerY = scenePointerY + snapOffset.y;
@@ -6987,6 +7011,12 @@ class App extends React.Component<AppProps, AppState> {
           }
           return { snapLines: nextSnapLines };
         });
+
+        // When hovering over a port, update the line's pending end-port info
+        // so it can be committed on the next pointer-down.
+        // We don't write this as a permanent mutation here (pointer may move away).
+        // Connection metadata is written definitively in handlePointerUp / commit.
+        void drawingSnappedPort; // reserved for future point-commit hook
       }
 
       if (lastPoint === lastCommittedPoint) {
@@ -7938,12 +7968,14 @@ class App extends React.Component<AppProps, AppState> {
     } else if (
       this.state.activeTool.type === "arrow" ||
       this.state.activeTool.type === "line" ||
-      this.state.activeTool.type === "room-freedraw"
+      this.state.activeTool.type === "room-freedraw" ||
+      this.state.activeTool.type === "pipe-draw"
     ) {
       this.handleLinearElementOnPointerDown(
         event,
-        // room-freedraw uses the line element type under the hood
-        this.state.activeTool.type === "room-freedraw"
+        // room-freedraw and pipe-draw both use the line element type under the hood
+        this.state.activeTool.type === "room-freedraw" ||
+          this.state.activeTool.type === "pipe-draw"
           ? "line"
           : this.state.activeTool.type,
         pointerDownState,
@@ -9293,6 +9325,36 @@ class App extends React.Component<AppProps, AppState> {
           )
         : null;
 
+      // Check if the starting point is on a P&ID port (for room-freedraw / pipe-draw).
+      // If so, record the start-port connection metadata immediately.
+      let startPortConnection:
+        | PidConnectionCustomData["pidConnection"]
+        | undefined;
+      if (
+        this.state.activeTool.type === "room-freedraw" ||
+        this.state.activeTool.type === "pipe-draw"
+      ) {
+        // Use generous snap radius (2.5× normal) matching snapLinearElementPoint
+        const snapDistance = (8 * 2.5) / this.state.zoom.value;
+        const allRefElements = this.scene.getNonDeletedElements();
+        const resolvedPorts = getAllPidPorts(allRefElements, null);
+        const startSnap = findNearestPidPort(
+          originX,
+          originY,
+          resolvedPorts,
+          snapDistance,
+        );
+        if (startSnap !== null) {
+          startPortConnection = {
+            startPort: {
+              elementId: startSnap.resolved.ownerElementId,
+              portId: startSnap.resolved.port.id,
+            },
+            pipeType: startSnap.resolved.port.acceptsTypes[0] ?? "pipe",
+          };
+        }
+      }
+
       this.scene.mutateElement(element, {
         points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(0, 0)],
         // Tag element with room tool metadata when drawn with a room tool
@@ -9301,6 +9363,15 @@ class App extends React.Component<AppProps, AppState> {
             ...element.customData,
             roomTool: "room-freedraw",
             roomName: element.customData?.roomName ?? "",
+            ...(startPortConnection && { pidConnection: startPortConnection }),
+          },
+        }),
+        // Tag element with pipe tool metadata when drawn with the pipe tool
+        ...(this.state.activeTool.type === "pipe-draw" && {
+          customData: {
+            ...element.customData,
+            pipeTool: "pipe-draw",
+            ...(startPortConnection && { pidConnection: startPortConnection }),
           },
         }),
       });
@@ -9808,7 +9879,7 @@ class App extends React.Component<AppProps, AppState> {
           let dragPointerY = pointerCoords.y;
           if (
             element &&
-            isRoomElement(element) &&
+            (isRoomElement(element) || isPipeElement(element)) &&
             !shouldRotateWithDiscreteAngle(event)
           ) {
             // Populate the snap cache once per drag, excluding the element
@@ -9829,12 +9900,20 @@ class App extends React.Component<AppProps, AppState> {
             const refElements = this.scene
               .getNonDeletedElements()
               .filter((el) => el.id !== element.id);
-            const { snapOffset, snapLines } = snapLinearElementPoint(
+            const existingPipeType =
+              (element.customData as PidConnectionCustomData | undefined)
+                ?.pidConnection?.pipeType ?? null;
+            const {
+              snapOffset,
+              snapLines,
+              snappedPort: dragSnappedPort,
+            } = snapLinearElementPoint(
               { x: pointerCoords.x, y: pointerCoords.y },
               this,
               event,
               elementsMap,
               refElements,
+              existingPipeType,
             );
             dragPointerX = pointerCoords.x + snapOffset.x;
             dragPointerY = pointerCoords.y + snapOffset.y;
@@ -9842,6 +9921,48 @@ class App extends React.Component<AppProps, AppState> {
               const next = updateStable(prevState.snapLines, snapLines);
               return prevState.snapLines === next ? null : { snapLines: next };
             });
+
+            // When a dragged endpoint snaps to a port, write connection metadata.
+            if (dragSnappedPort !== null) {
+              const pointIdx =
+                linearElementEditor.initialState.lastClickedPoint;
+              const isStart = pointIdx === 0;
+              const isEnd = pointIdx === element.points.length - 1;
+              if (isStart || isEnd) {
+                const existingConnection = (
+                  element.customData as PidConnectionCustomData | undefined
+                )?.pidConnection;
+                const pipeType =
+                  existingConnection?.pipeType ??
+                  dragSnappedPort.port.acceptsTypes[0] ??
+                  "pipe";
+                this.scene.mutateElement(element, {
+                  customData: {
+                    ...element.customData,
+                    pidConnection: {
+                      ...existingConnection,
+                      ...(isStart
+                        ? {
+                            startPort: {
+                              elementId: dragSnappedPort.ownerElementId,
+                              portId: dragSnappedPort.port.id,
+                            },
+                          }
+                        : {}),
+                      ...(isEnd
+                        ? {
+                            endPort: {
+                              elementId: dragSnappedPort.ownerElementId,
+                              portId: dragSnappedPort.port.id,
+                            },
+                          }
+                        : {}),
+                      pipeType,
+                    } satisfies PidConnectionCustomData["pidConnection"],
+                  },
+                });
+              }
+            }
           }
 
           const newState = LinearElementEditor.handlePointDragging(

@@ -10,6 +10,14 @@ import {
 } from "@excalidraw/math";
 
 import { TOOL_TYPE, KEYS } from "@excalidraw/common";
+
+import {
+  isPidSymbolElement,
+  resolvePortPositions,
+  getAllResolvedPorts,
+  findNearestPort,
+} from "../pid/src/ports";
+import type { ResolvedPort, PortType } from "../pid/src/types";
 import {
   getCommonBounds,
   getDraggedElementsBounds,
@@ -338,6 +346,25 @@ export const getElementsCorners = (
     result = omitCenter
       ? [topLeft, topRight, bottomLeft, bottomRight]
       : [topLeft, topRight, bottomLeft, bottomRight, center];
+  }
+
+  // For P&ID symbols, also include typed port positions as snap targets.
+  // This makes all snap-capable tools (not just room-freedraw) see ports.
+  if (elements.length === 1 && isPidSymbolElement(elements[0])) {
+    const offsetX = dragOffset?.x ?? 0;
+    const offsetY = dragOffset?.y ?? 0;
+    const allSceneElements = Array.from(elementsMap.values());
+    for (const resolved of resolvePortPositions(
+      elements[0],
+      allSceneElements,
+    )) {
+      result.push(
+        pointFrom<GlobalPoint>(
+          round(resolved.x + offsetX),
+          round(resolved.y + offsetY),
+        ),
+      );
+    }
   }
 
   return result.map((p) => pointFrom(round(p[0]), round(p[1])));
@@ -1437,8 +1464,12 @@ export const getSnapLinesAtPointer = (
  * This is a lightweight variant of `getSnapLinesAtPointer` that:
  * - Optionally accepts a pre-built list of reference elements so callers can
  *   exclude the element currently being drawn.
- * - Returns `{ snapOffset, snapLines }` matching the shape expected by
- *   `snapNewElement` / `snapDraggedElements`.
+ * - Returns `{ snapOffset, snapLines, snappedPort }` — snappedPort is non-null
+ *   when the snap landed on a P&ID symbol port (used by App.tsx to write
+ *   connection metadata to the line's customData).
+ * - Port snapping takes priority over corner/segment snapping.
+ * - An untyped line (activePipeType = null) snaps to any port.
+ * - A typed line (activePipeType = "steam-pipe" etc.) only snaps to compatible ports.
  *
  * The SnapCache must already be populated by the caller before this is invoked.
  */
@@ -1448,12 +1479,14 @@ export const snapLinearElementPoint = (
   event: KeyboardModifiersObject,
   elementsMap: ElementsMap,
   referenceElements?: readonly ExcalidrawElement[],
+  activePipeType?: PortType | null,
 ): {
   snapOffset: Vector2D;
   snapLines: SnapLine[];
+  snappedPort: ResolvedPort | null;
 } => {
   if (!isSnappingEnabled({ event, selectedElements: [], app })) {
-    return { snapOffset: { x: 0, y: 0 }, snapLines: [] };
+    return { snapOffset: { x: 0, y: 0 }, snapLines: [], snappedPort: null };
   }
 
   const snapDistance = getSnapDistance(app.state.zoom.value);
@@ -1470,6 +1503,43 @@ export const snapLinearElementPoint = (
       app.state,
       elementsMap,
     );
+
+  // --- Port snapping: highest priority ---
+  // Ports use a generous snap radius (2.5× normal) so they're easy to hit.
+  const PORT_SNAP_MULTIPLIER = 2.5;
+  const portSnapDistance = snapDistance * PORT_SNAP_MULTIPLIER;
+  const pipeType = activePipeType ?? null;
+  const resolvedPorts = getAllResolvedPorts(refs, pipeType);
+  const nearestPort = findNearestPort(
+    pointer.x,
+    pointer.y,
+    resolvedPorts,
+    portSnapDistance,
+  );
+
+  if (nearestPort !== null) {
+    const { x: px, y: py } = nearestPort.resolved;
+    const portPoint = pointFrom<GlobalPoint>(px, py);
+    return {
+      snapOffset: {
+        x: px - pointer.x,
+        y: py - pointer.y,
+      },
+      snapLines: [
+        {
+          type: "pointer",
+          points: [portPoint, pointFrom(px, pointer.y)],
+          direction: "vertical",
+        } satisfies PointerSnapLine,
+        {
+          type: "pointer",
+          points: [portPoint, pointFrom(pointer.x, py)],
+          direction: "horizontal",
+        } satisfies PointerSnapLine,
+      ],
+      snappedPort: nearestPort.resolved,
+    };
+  }
 
   // Track the best segment snap separately: Euclidean distance to a foot
   // point on a line segment.  When this wins it overrides axis snaps.
@@ -1499,6 +1569,9 @@ export const snapLinearElementPoint = (
       }
     } else {
       // --- Corner/vertex axis snapping for non-linear elements ---
+      // (Port positions from P&ID symbols are already embedded in getElementsCorners
+      // for tools that go through the standard snap path, but here we use the raw
+      // corner list so we can keep the axis-independent behaviour.)
       const corners = getElementsCorners([referenceElement], elementsMap);
 
       for (const corner of corners) {
@@ -1560,6 +1633,7 @@ export const snapLinearElementPoint = (
           direction: "horizontal",
         } satisfies PointerSnapLine,
       ],
+      snappedPort: null,
     };
   }
 
@@ -1577,6 +1651,7 @@ export const snapLinearElementPoint = (
   return {
     snapOffset,
     snapLines: [...verticalSnapLines, ...horizontalSnapLines],
+    snappedPort: null,
   };
 };
 
@@ -1596,10 +1671,14 @@ export const isActiveToolNonLinearSnappable = (
 
 /**
  * Returns true for tools that use point-by-point linear drawing and should
- * benefit from object-to-point snapping while drawing (e.g. room-freedraw).
+ * benefit from object-to-point snapping while drawing.
+ * Covers room-freedraw (closed room polygons) and pipe-draw (open P&ID pipes).
  */
 export const isActiveToolLinearSnappable = (
   activeToolType: AppState["activeTool"]["type"],
 ) => {
-  return activeToolType === TOOL_TYPE["room-freedraw"];
+  return (
+    activeToolType === TOOL_TYPE["room-freedraw"] ||
+    activeToolType === TOOL_TYPE["pipe-draw"]
+  );
 };

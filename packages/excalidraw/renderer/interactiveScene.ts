@@ -81,6 +81,10 @@ import type {
 } from "@excalidraw/element/types";
 
 import { renderSnaps } from "../renderer/renderSnaps";
+import {
+  renderPortIndicators,
+  shouldShowPortIndicators,
+} from "../renderer/renderPortIndicators";
 import { roundRect } from "../renderer/roundRect";
 import {
   getScrollBars,
@@ -2027,6 +2031,16 @@ const _renderInteractiveScene = ({
   });
 
   renderSnaps(context, appState);
+
+  // Render P&ID port indicators when pipe-draw is active or editing a pipe
+  const allElementsArr = Array.from(allElementsMap.values());
+  const { show: showPorts, pipeType } = shouldShowPortIndicators(
+    appState,
+    allElementsArr,
+  );
+  if (showPorts) {
+    renderPortIndicators(context, appState, allElementsArr, pipeType);
+  }
 
   context.restore();
 

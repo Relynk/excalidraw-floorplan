@@ -158,7 +158,9 @@ export type ToolType =
   | "embeddable"
   | "laser"
   // Relynk room tools
-  | "room-freedraw";
+  | "room-freedraw"
+  // Relynk P&ID pipe tool
+  | "pipe-draw";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 

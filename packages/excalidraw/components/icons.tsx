@@ -375,6 +375,22 @@ export const LineIcon = createIcon(
   modifiedTablerIconProps,
 );
 
+// Relynk: P&ID pipe-draw tool — two parallel lines with connecting caps
+export const PipeDrawIcon = createIcon(
+  <g strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    {/* Main pipe line */}
+    <path d="M4 12 L20 12" />
+    {/* Flow direction arrow */}
+    <path d="M15 9 L20 12 L15 15" />
+    {/* Left port cap */}
+    <path d="M4 9 L4 15" />
+    {/* Right port cap */}
+    <path d="M20 9 L20 15" />
+  </g>,
+  tablerIconProps,
+);
+
 // Relynk: Room free-draw tool — a closed polygon outline representing a room
 export const RoomFreedrawIcon = createIcon(
   <g strokeWidth="1.5" fill="none">

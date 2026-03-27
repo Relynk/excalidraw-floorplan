@@ -117,6 +117,9 @@ export const AllowedExcalidrawActiveTools: Record<
   hand: true,
   laser: false,
   magicframe: false,
+  // Relynk custom tools
+  "room-freedraw": true,
+  "pipe-draw": true,
 };
 
 export type RestoredDataState = {
@@ -307,17 +310,17 @@ const restoreElementWithProperties = <
     roundness: element.roundness
       ? element.roundness
       : element.strokeSharpness === "round"
-      ? {
-          // for old elements that would now use adaptive radius algo,
-          // use legacy algo instead
-          type: isUsingAdaptiveRadius(element.type)
-            ? ROUNDNESS.LEGACY
-            : ROUNDNESS.PROPORTIONAL_RADIUS,
-        }
-      : null,
+        ? {
+            // for old elements that would now use adaptive radius algo,
+            // use legacy algo instead
+            type: isUsingAdaptiveRadius(element.type)
+              ? ROUNDNESS.LEGACY
+              : ROUNDNESS.PROPORTIONAL_RADIUS,
+          }
+        : null,
     boundElements: element.boundElementIds
       ? element.boundElementIds.map((id) => ({ type: "arrow", id }))
-      : element.boundElements ?? [],
+      : (element.boundElements ?? []),
     updated: element.updated ?? getUpdatedTimestamp(),
     link: element.link ? normalizeLink(element.link) : null,
     locked: element.locked ?? false,
@@ -453,7 +456,7 @@ export const restoreElement = (
         ...(isLineElement(element)
           ? {
               polygon: isValidPolygon(element.points)
-                ? element.polygon ?? false
+                ? (element.polygon ?? false)
                 : false,
             }
           : {}),
@@ -603,7 +606,7 @@ const repairBoundElement = (
     : null;
 
   (boundElement as Mutable<typeof boundElement>).angle = (
-    isArrowElement(container) ? 0 : container?.angle ?? 0
+    isArrowElement(container) ? 0 : (container?.angle ?? 0)
   ) as Radians;
 
   if (!container) {
@@ -930,8 +933,8 @@ export const restoreAppState = (
       suppliedValue !== undefined
         ? suppliedValue
         : localValue !== undefined
-        ? localValue
-        : defaultValue;
+          ? localValue
+          : defaultValue;
   }
 
   return {
@@ -940,7 +943,7 @@ export const restoreAppState = (
     // reset on fresh restore so as to hide the UI button if penMode not active
     penDetected:
       localAppState?.penDetected ??
-      (appState.penMode ? appState.penDetected ?? false : false),
+      (appState.penMode ? (appState.penDetected ?? false) : false),
     activeTool: {
       ...updateActiveTool(
         defaultAppState,
@@ -957,7 +960,7 @@ export const restoreAppState = (
       value: getNormalizedZoom(
         isFiniteNumber(appState.zoom)
           ? appState.zoom
-          : appState.zoom?.value ?? defaultAppState.zoom.value,
+          : (appState.zoom?.value ?? defaultAppState.zoom.value),
       ),
     },
     openSidebar:

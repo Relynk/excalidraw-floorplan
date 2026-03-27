@@ -568,8 +568,8 @@ const drawElementOnCanvas = (
           element.textAlign === "center"
             ? element.width / 2
             : element.textAlign === "right"
-            ? element.width
-            : 0;
+              ? element.width
+              : 0;
 
         const lineHeightPx = getLineHeightInPx(
           element.fontSize,
@@ -798,6 +798,13 @@ export const renderElement = (
     renderConfig.pendingFlowchartNodes,
     reduceAlphaForSelection ? DEFAULT_REDUCED_GLOBAL_ALPHA : 1,
   );
+
+  // P&ID state engine: skip rendering elements hidden via variable binding.
+  // The state engine sets customData.pidHidden = true on elements that should
+  // be invisible based on the current variable state.
+  if (element.customData?.pidHidden === true) {
+    return;
+  }
 
   switch (element.type) {
     case "magicframe":
