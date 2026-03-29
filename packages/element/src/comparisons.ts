@@ -4,6 +4,7 @@ export const hasBackground = (type: ElementOrToolType) =>
   type === "rectangle" ||
   type === "iframe" ||
   type === "embeddable" ||
+  type === "reactEmbed" ||
   type === "ellipse" ||
   type === "diamond" ||
   type === "line" ||
@@ -17,12 +18,14 @@ export const hasStrokeColor = (type: ElementOrToolType) =>
   type === "arrow" ||
   type === "line" ||
   type === "text" ||
-  type === "embeddable";
+  type === "embeddable" ||
+  type === "reactEmbed";
 
 export const hasStrokeWidth = (type: ElementOrToolType) =>
   type === "rectangle" ||
   type === "iframe" ||
   type === "embeddable" ||
+  type === "reactEmbed" ||
   type === "ellipse" ||
   type === "diamond" ||
   type === "freedraw" ||
@@ -33,6 +36,7 @@ export const hasStrokeStyle = (type: ElementOrToolType) =>
   type === "rectangle" ||
   type === "iframe" ||
   type === "embeddable" ||
+  type === "reactEmbed" ||
   type === "ellipse" ||
   type === "diamond" ||
   type === "arrow" ||
@@ -42,6 +46,7 @@ export const canChangeRoundness = (type: ElementOrToolType) =>
   type === "rectangle" ||
   type === "iframe" ||
   type === "embeddable" ||
+  type === "reactEmbed" ||
   type === "line" ||
   type === "diamond" ||
   type === "image";

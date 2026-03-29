@@ -95,6 +95,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     children,
     validateEmbeddable,
     renderEmbeddable,
+    renderReactEmbed,
+    reactEmbedOptions,
     aiEnabled,
     showDeprecatedFonts,
     renderScrollbars,
@@ -205,6 +207,8 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onDuplicate={onDuplicate}
           validateEmbeddable={validateEmbeddable}
           renderEmbeddable={renderEmbeddable}
+          renderReactEmbed={renderReactEmbed}
+          reactEmbedOptions={reactEmbedOptions}
           aiEnabled={aiEnabled !== false}
           showDeprecatedFonts={showDeprecatedFonts}
           renderScrollbars={renderScrollbars}

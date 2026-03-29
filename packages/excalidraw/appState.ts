@@ -44,6 +44,7 @@ export const getDefaultAppState = (): Omit<
     currentHoveredFontFamily: null,
     cursorButton: "up",
     activeEmbeddable: null,
+    activeReactEmbed: null,
     newElement: null,
     editingTextElement: null,
     editingGroupId: null,
@@ -113,6 +114,7 @@ export const getDefaultAppState = (): Omit<
     },
     viewModeEnabled: false,
     showHyperlinkPopup: false,
+    showReactEmbedPicker: false,
     selectedLinearElement: null,
     snapLines: [],
     originSnapOffset: {
@@ -175,6 +177,7 @@ const APP_STATE_STORAGE_CONF = (<
   currentHoveredFontFamily: { browser: false, export: false, server: false },
   cursorButton: { browser: true, export: false, server: false },
   activeEmbeddable: { browser: false, export: false, server: false },
+  activeReactEmbed: { browser: false, export: false, server: false },
   newElement: { browser: false, export: false, server: false },
   editingTextElement: { browser: false, export: false, server: false },
   editingGroupId: { browser: true, export: false, server: false },
@@ -242,6 +245,7 @@ const APP_STATE_STORAGE_CONF = (<
   zoom: { browser: true, export: false, server: false },
   viewModeEnabled: { browser: false, export: false, server: false },
   showHyperlinkPopup: { browser: false, export: false, server: false },
+  showReactEmbedPicker: { browser: false, export: false, server: false },
   selectedLinearElement: { browser: true, export: false, server: false },
   snapLines: { browser: true, export: false, server: false },
   originSnapOffset: { browser: false, export: false, server: false },
@@ -263,11 +267,11 @@ const _clearAppStateForStorage = <
   exportType: ExportType,
 ) => {
   type ExportableKeys = {
-    [K in keyof typeof APP_STATE_STORAGE_CONF]: typeof APP_STATE_STORAGE_CONF[K][ExportType] extends true
+    [K in keyof typeof APP_STATE_STORAGE_CONF]: (typeof APP_STATE_STORAGE_CONF)[K][ExportType] extends true
       ? K
       : never;
   }[keyof typeof APP_STATE_STORAGE_CONF];
-  const stateForExport = {} as { [K in ExportableKeys]?: typeof appState[K] };
+  const stateForExport = {} as { [K in ExportableKeys]?: (typeof appState)[K] };
   for (const key of Object.keys(appState) as (keyof typeof appState)[]) {
     const propConfig = APP_STATE_STORAGE_CONF[key];
     if (propConfig?.[exportType]) {

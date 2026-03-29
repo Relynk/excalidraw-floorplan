@@ -126,6 +126,7 @@ import {
   newFrameElement,
   newFreeDrawElement,
   newEmbeddableElement,
+  newReactEmbedElement,
   newMagicFrameElement,
   newIframeElement,
   newArrowElement,
@@ -144,6 +145,7 @@ import {
   isFrameLikeElement,
   isImageElement,
   isEmbeddableElement,
+  isReactEmbedElement,
   isInitializedImageElement,
   isLinearElement,
   isLinearElementType,
@@ -281,6 +283,7 @@ import type {
   IframeData,
   ExcalidrawIframeElement,
   ExcalidrawEmbeddableElement,
+  ExcalidrawReactEmbedElement,
   Ordered,
   MagicGenerationData,
   ExcalidrawArrowElement,
@@ -402,6 +405,8 @@ import {
   hideHyperlinkToolip,
   Hyperlink,
 } from "../components/hyperlink/Hyperlink";
+
+import { ReactEmbedPicker } from "./ReactEmbedPicker";
 
 import { Fonts } from "../fonts";
 import { editorJotaiStore, type WritableAtom } from "../editor-jotai";
@@ -676,6 +681,8 @@ class App extends React.Component<AppProps, AppState> {
   /** embeds that have been inserted to DOM (as a perf optim, we don't want to
    * insert to DOM before user initially scrolls to them) */
   private initializedEmbeds = new Set<ExcalidrawIframeLikeElement["id"]>();
+  /** react embed elements that have been inserted to DOM */
+  private initializedReactEmbeds = new Set<ExcalidrawReactEmbedElement["id"]>();
 
   private elementsPendingErasure: ElementsPendingErasure = new Set();
 
@@ -1856,6 +1863,104 @@ class App extends React.Component<AppProps, AppState> {
     );
   }
 
+  private renderReactEmbeds() {
+    const scale = this.state.zoom.value;
+    const normalizedWidth = this.state.width;
+    const normalizedHeight = this.state.height;
+
+    const reactEmbedElements = this.scene
+      .getNonDeletedElements()
+      .filter((el): el is Ordered<NonDeleted<ExcalidrawReactEmbedElement>> =>
+        isReactEmbedElement(el),
+      );
+
+    return (
+      <>
+        {reactEmbedElements.map((el) => {
+          const { x, y } = sceneCoordsToViewportCoords(
+            { sceneX: el.x, sceneY: el.y },
+            this.state,
+          );
+
+          const isVisible = isElementInViewport(
+            el,
+            normalizedWidth,
+            normalizedHeight,
+            this.state,
+            this.scene.getNonDeletedElementsMap(),
+          );
+          const hasBeenInitialized = this.initializedReactEmbeds.has(el.id);
+
+          if (isVisible && !hasBeenInitialized) {
+            this.initializedReactEmbeds.add(el.id);
+          }
+          const shouldRender = isVisible || hasBeenInitialized;
+
+          if (!shouldRender) {
+            return null;
+          }
+
+          const isActive =
+            this.state.activeReactEmbed?.element === el &&
+            this.state.activeReactEmbed?.state === "active";
+
+          return (
+            <div
+              key={el.id}
+              className="excalidraw__react-embed-container"
+              style={{
+                transform: isVisible
+                  ? `translate(${x - this.state.offsetLeft}px, ${
+                      y - this.state.offsetTop
+                    }px) scale(${scale})`
+                  : "none",
+                display: isVisible ? "block" : "none",
+                opacity: getRenderOpacity(
+                  el,
+                  getContainingFrame(el, this.scene.getNonDeletedElementsMap()),
+                  this.elementsPendingErasure,
+                  null,
+                  1,
+                ),
+                ["--react-embed-radius" as string]: `${getCornerRadius(
+                  Math.min(el.width, el.height),
+                  el,
+                )}px`,
+              }}
+            >
+              <div
+                className="excalidraw__react-embed-container__inner"
+                style={{
+                  width: isVisible ? `${el.width}px` : 0,
+                  height: isVisible ? `${el.height}px` : 0,
+                  transform: isVisible ? `rotate(${el.angle}rad)` : "none",
+                  pointerEvents: isActive
+                    ? POINTER_EVENTS.enabled
+                    : POINTER_EVENTS.disabled,
+                }}
+              >
+                <div
+                  className="excalidraw__react-embed__outer"
+                  style={{
+                    padding: `${el.strokeWidth}px`,
+                  }}
+                >
+                  {el.customData?.componentKey
+                    ? (this.props.renderReactEmbed?.(el, this.state) ?? (
+                        <div className="excalidraw__react-embed__placeholder">
+                          {el.customData.componentKey}
+                        </div>
+                      ))
+                    : null}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+
   private getFrameNameDOMId = (frameElement: ExcalidrawElement) => {
     return `${this.id}-frame-name-${frameElement.id}`;
   };
@@ -2228,6 +2333,19 @@ class App extends React.Component<AppProps, AppState> {
                                 }
                               />
                             )}
+                          {selectedElements.length === 1 &&
+                            this.state.showReactEmbedPicker &&
+                            isReactEmbedElement(firstSelectedElement) && (
+                              <ReactEmbedPicker
+                                key={firstSelectedElement.id}
+                                element={firstSelectedElement}
+                                appState={this.state}
+                                elementsMap={elementsMap}
+                                scene={this.scene}
+                                setAppState={this.setAppState}
+                                options={this.props.reactEmbedOptions ?? []}
+                              />
+                            )}
                           {this.props.aiEnabled !== false &&
                             selectedElements.length === 1 &&
                             isMagicFrameElement(firstSelectedElement) && (
@@ -2414,6 +2532,7 @@ class App extends React.Component<AppProps, AppState> {
                           )}
                         </ExcalidrawActionManagerContext.Provider>
                         {this.renderEmbeddables()}
+                        {this.renderReactEmbeds()}
                       </ExcalidrawElementsContext.Provider>
                     </ExcalidrawAppStateContext.Provider>
                   </ExcalidrawSetAppStateContext.Provider>
@@ -3465,6 +3584,14 @@ class App extends React.Component<AppProps, AppState> {
       this.state.showHyperlinkPopup
     ) {
       this.setState({ showHyperlinkPopup: false });
+    }
+    // Hide react embed picker if tool changes
+    if (
+      prevState.activeTool.type === "selection" &&
+      this.state.activeTool.type !== "selection" &&
+      this.state.showReactEmbedPicker
+    ) {
+      this.setState({ showReactEmbedPicker: false });
     }
     if (prevProps.langCode !== this.props.langCode) {
       this.updateLanguage();
@@ -9530,7 +9657,8 @@ class App extends React.Component<AppProps, AppState> {
       | "diamond"
       | "ellipse"
       | "iframe"
-      | "embeddable",
+      | "embeddable"
+      | "reactEmbed",
   ) {
     return this.state.currentItemRoundness === "round"
       ? {
@@ -9542,7 +9670,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private createGenericElementOnPointerDown = (
-    elementType: ExcalidrawGenericElement["type"] | "embeddable",
+    elementType: ExcalidrawGenericElement["type"] | "embeddable" | "reactEmbed",
     pointerDownState: PointerDownState,
   ): void => {
     const [gridX, gridY] = getGridPoint(
@@ -9577,6 +9705,11 @@ class App extends React.Component<AppProps, AppState> {
     if (elementType === "embeddable") {
       element = newEmbeddableElement({
         type: "embeddable",
+        ...baseElementAttributes,
+      });
+    } else if (elementType === "reactEmbed") {
+      element = newReactEmbedElement({
+        type: "reactEmbed",
         ...baseElementAttributes,
       });
     } else {
@@ -11657,6 +11790,11 @@ class App extends React.Component<AppProps, AppState> {
             isEmbeddableElement(newElement) && !newElement.link
               ? "editor"
               : prevState.showHyperlinkPopup,
+          showReactEmbedPicker:
+            isReactEmbedElement(newElement) &&
+            !newElement.customData?.componentKey
+              ? true
+              : prevState.showReactEmbedPicker,
         }));
       }
 
@@ -12462,6 +12600,7 @@ class App extends React.Component<AppProps, AppState> {
             }
           : this.state),
         showHyperlinkPopup: false,
+        showReactEmbedPicker: false,
       },
       () => {
         this.setState({

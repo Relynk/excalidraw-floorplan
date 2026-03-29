@@ -24,6 +24,7 @@ import { getLineHeightInPx } from "@excalidraw/element";
 import {
   isArrowElement,
   isIframeLikeElement,
+  isReactEmbedElement,
   isInitializedImageElement,
   isTextElement,
 } from "@excalidraw/element";
@@ -277,6 +278,29 @@ const renderElementToSvg = (
         embeddableNode.appendChild(foreignObject);
       }
       addToRoot(embeddableNode, element);
+      break;
+    }
+    case "reactEmbed": {
+      // render placeholder rectangle for SVG export (React components can't be embedded in SVG)
+      const shape = ShapeCache.generateElementShape(element, renderConfig);
+      const node = roughSVGDrawWithPrecision(
+        rsvg,
+        shape,
+        MAX_DECIMALS_FOR_SVG_EXPORT,
+      );
+      const opacity = element.opacity / 100;
+      if (opacity !== 1) {
+        node.setAttribute("stroke-opacity", `${opacity}`);
+        node.setAttribute("fill-opacity", `${opacity}`);
+      }
+      node.setAttribute("stroke-linecap", "round");
+      node.setAttribute(
+        "transform",
+        `translate(${offsetX || 0} ${
+          offsetY || 0
+        }) rotate(${degree} ${cx} ${cy})`,
+      );
+      addToRoot(node, element);
       break;
     }
     case "line":
@@ -654,8 +678,8 @@ const renderElementToSvg = (
           element.textAlign === "center"
             ? element.width / 2
             : element.textAlign === "right"
-            ? element.width
-            : 0;
+              ? element.width
+              : 0;
         const verticalOffset = getVerticalOffset(
           element.fontFamily,
           element.fontSize,
@@ -666,8 +690,8 @@ const renderElementToSvg = (
           element.textAlign === "center"
             ? "middle"
             : element.textAlign === "right" || direction === "rtl"
-            ? "end"
-            : "start";
+              ? "end"
+              : "start";
         for (let i = 0; i < lines.length; i++) {
           const text = svgRoot.ownerDocument.createElementNS(SVG_NS, "text");
           text.textContent = lines[i];
@@ -719,7 +743,7 @@ export const renderSceneToSvg = (
 
   // render elements
   elements
-    .filter((el) => !isIframeLikeElement(el))
+    .filter((el) => !isIframeLikeElement(el) && !isReactEmbedElement(el))
     .forEach((element) => {
       if (!element.isDeleted) {
         if (
@@ -756,6 +780,28 @@ export const renderSceneToSvg = (
               renderConfig,
             );
           }
+        } catch (error: any) {
+          console.error(error);
+        }
+      }
+    });
+
+  // render react embeds on top (placeholder only in SVG export)
+  elements
+    .filter((el) => isReactEmbedElement(el))
+    .forEach((element) => {
+      if (!element.isDeleted) {
+        try {
+          renderElementToSvg(
+            element,
+            elementsMap,
+            rsvg,
+            svgRoot,
+            files,
+            element.x + renderConfig.offsetX,
+            element.y + renderConfig.offsetY,
+            renderConfig,
+          );
         } catch (error: any) {
           console.error(error);
         }

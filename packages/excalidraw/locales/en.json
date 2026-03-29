@@ -299,6 +299,7 @@
     "libraryElementTypeError": {
       "embeddable": "Embeddable elements cannot be added to the library.",
       "iframe": "IFrame elements cannot be added to the library.",
+      "reactEmbed": "React Embed elements cannot be added to the library.",
       "image": "Support for adding images to the library coming soon!"
     },
     "asyncPasteFailedOnRead": "Couldn't paste (couldn't read from system clipboard).",
@@ -324,6 +325,7 @@
     "frame": "Frame tool",
     "magicframe": "Wireframe to code",
     "embeddable": "Web Embed",
+    "reactEmbed": "React Embed",
     "laser": "Laser pointer",
     "hand": "Hand (panning tool)",
     "room-freedraw": "Room: Free draw",
@@ -346,7 +348,8 @@
     "magicframe": "Wireframe to code",
     "embeddable": "Web Embed",
     "selection": "Selection",
-    "iframe": "IFrame"
+    "iframe": "IFrame",
+    "reactEmbed": "React Embed"
   },
   "headings": {
     "canvasActions": "Canvas actions",

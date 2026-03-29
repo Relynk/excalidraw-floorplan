@@ -507,6 +507,17 @@ export const EmbedIcon = createIcon(
   modifiedTablerIconProps,
 );
 
+export const ReactEmbedIcon = createIcon(
+  <g strokeWidth="1.5">
+    <rect x="2" y="5" width="16" height="14" rx="2" />
+    <path d="M7 9h2m4 0h-2m-2 0v6m0 0H9m2 0h2" />
+    <circle cx="10" cy="2.5" r="1" fill="currentColor" strokeWidth="0" />
+    <circle cx="14" cy="2.5" r="1" fill="currentColor" strokeWidth="0" />
+    <path d="M10 2.5 Q12 1 14 2.5" fill="none" />
+  </g>,
+  modifiedTablerIconProps,
+);
+
 export const DuplicateIcon = createIcon(
   <g strokeWidth="1.25">
     <path d="M14.375 6.458H8.958a2.5 2.5 0 0 0-2.5 2.5v5.417a2.5 2.5 0 0 0 2.5 2.5h5.417a2.5 2.5 0 0 0 2.5-2.5V8.958a2.5 2.5 0 0 0-2.5-2.5Z" />

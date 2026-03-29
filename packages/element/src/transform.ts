@@ -50,6 +50,7 @@ import type {
   ExcalidrawFreeDrawElement,
   ExcalidrawGenericElement,
   ExcalidrawIframeLikeElement,
+  ExcalidrawReactEmbedElement,
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
   ExcalidrawMagicFrameElement,
@@ -73,109 +74,112 @@ export type ValidLinearElement = {
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
   } & MarkOptional<ElementConstructorOpts, "x" | "y">;
-  end?:
+  end?: (
     | (
-        | (
-            | {
-                type: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
-                id?: ExcalidrawGenericElement["id"];
-              }
-            | {
-                id: ExcalidrawGenericElement["id"];
-                type?: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
-              }
-          )
-        | ((
-            | {
-                type: "text";
-                text: string;
-              }
-            | {
-                type?: "text";
-                id: ExcalidrawTextElement["id"];
-                text: string;
-              }
-          ) &
-            Partial<ExcalidrawTextElement>)
+        | {
+            type: Exclude<
+              ExcalidrawBindableElement["type"],
+              | "image"
+              | "text"
+              | "frame"
+              | "magicframe"
+              | "embeddable"
+              | "reactEmbed"
+              | "iframe"
+            >;
+            id?: ExcalidrawGenericElement["id"];
+          }
+        | {
+            id: ExcalidrawGenericElement["id"];
+            type?: Exclude<
+              ExcalidrawBindableElement["type"],
+              | "image"
+              | "text"
+              | "frame"
+              | "magicframe"
+              | "embeddable"
+              | "reactEmbed"
+              | "iframe"
+            >;
+          }
+      )
+    | ((
+        | {
+            type: "text";
+            text: string;
+          }
+        | {
+            type?: "text";
+            id: ExcalidrawTextElement["id"];
+            text: string;
+          }
       ) &
-        MarkOptional<ElementConstructorOpts, "x" | "y">;
-  start?:
+        Partial<ExcalidrawTextElement>)
+  ) &
+    MarkOptional<ElementConstructorOpts, "x" | "y">;
+  start?: (
     | (
-        | (
-            | {
-                type: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
-                id?: ExcalidrawGenericElement["id"];
-              }
-            | {
-                id: ExcalidrawGenericElement["id"];
-                type?: Exclude<
-                  ExcalidrawBindableElement["type"],
-                  | "image"
-                  | "text"
-                  | "frame"
-                  | "magicframe"
-                  | "embeddable"
-                  | "iframe"
-                >;
-              }
-          )
-        | ((
-            | {
-                type: "text";
-                text: string;
-              }
-            | {
-                type?: "text";
-                id: ExcalidrawTextElement["id"];
-                text: string;
-              }
-          ) &
-            Partial<ExcalidrawTextElement>)
+        | {
+            type: Exclude<
+              ExcalidrawBindableElement["type"],
+              | "image"
+              | "text"
+              | "frame"
+              | "magicframe"
+              | "embeddable"
+              | "reactEmbed"
+              | "iframe"
+            >;
+            id?: ExcalidrawGenericElement["id"];
+          }
+        | {
+            id: ExcalidrawGenericElement["id"];
+            type?: Exclude<
+              ExcalidrawBindableElement["type"],
+              | "image"
+              | "text"
+              | "frame"
+              | "magicframe"
+              | "embeddable"
+              | "reactEmbed"
+              | "iframe"
+            >;
+          }
+      )
+    | ((
+        | {
+            type: "text";
+            text: string;
+          }
+        | {
+            type?: "text";
+            id: ExcalidrawTextElement["id"];
+            text: string;
+          }
       ) &
-        MarkOptional<ElementConstructorOpts, "x" | "y">;
+        Partial<ExcalidrawTextElement>)
+  ) &
+    MarkOptional<ElementConstructorOpts, "x" | "y">;
 } & Partial<ExcalidrawLinearElement>;
 
-export type ValidContainer =
-  | {
-      type: Exclude<ExcalidrawGenericElement["type"], "selection">;
-      id?: ExcalidrawGenericElement["id"];
-      label?: {
-        text: string;
-        fontSize?: number;
-        fontFamily?: FontFamilyValues;
-        textAlign?: TextAlign;
-        verticalAlign?: VerticalAlign;
-      } & MarkOptional<ElementConstructorOpts, "x" | "y">;
-    } & ElementConstructorOpts;
+export type ValidContainer = {
+  type: Exclude<ExcalidrawGenericElement["type"], "selection">;
+  id?: ExcalidrawGenericElement["id"];
+  label?: {
+    text: string;
+    fontSize?: number;
+    fontFamily?: FontFamilyValues;
+    textAlign?: TextAlign;
+    verticalAlign?: VerticalAlign;
+  } & MarkOptional<ElementConstructorOpts, "x" | "y">;
+} & ElementConstructorOpts;
 
 export type ExcalidrawElementSkeleton =
   | Extract<
       Exclude<ExcalidrawElement, ExcalidrawSelectionElement>,
-      ExcalidrawIframeLikeElement | ExcalidrawFreeDrawElement
+      | ExcalidrawIframeLikeElement
+      | ExcalidrawReactEmbedElement
+      | ExcalidrawFreeDrawElement
     >
   | ({
       type: Extract<ExcalidrawLinearElement["type"], "line">;
@@ -624,7 +628,8 @@ export const convertToExcalidrawElements = (
       }
       case "freedraw":
       case "iframe":
-      case "embeddable": {
+      case "embeddable":
+      case "reactEmbed": {
         excalidrawElement = element;
         break;
       }

@@ -201,8 +201,8 @@ export const generateRoughOptions = (
       element.strokeStyle === "dashed"
         ? getDashArrayDashed(element.strokeWidth)
         : element.strokeStyle === "dotted"
-        ? getDashArrayDotted(element.strokeWidth)
-        : undefined,
+          ? getDashArrayDotted(element.strokeWidth)
+          : undefined,
     // for non-solid strokes, disable multiStroke because it tends to make
     // dashes/dots overlay each other
     disableMultiStroke: element.strokeStyle !== "solid",
@@ -229,14 +229,15 @@ export const generateRoughOptions = (
     case "rectangle":
     case "iframe":
     case "embeddable":
+    case "reactEmbed":
     case "diamond":
     case "ellipse": {
       options.fillStyle = element.fillStyle;
       options.fill = isTransparent(element.backgroundColor)
         ? undefined
         : isDarkMode
-        ? applyDarkModeFilter(element.backgroundColor)
-        : element.backgroundColor;
+          ? applyDarkModeFilter(element.backgroundColor)
+          : element.backgroundColor;
       if (element.type === "ellipse") {
         options.curveFitting = 1;
       }
@@ -250,8 +251,8 @@ export const generateRoughOptions = (
           element.backgroundColor === "transparent"
             ? undefined
             : isDarkMode
-            ? applyDarkModeFilter(element.backgroundColor)
-            : element.backgroundColor;
+              ? applyDarkModeFilter(element.backgroundColor)
+              : element.backgroundColor;
       }
       return options;
     }
@@ -783,7 +784,8 @@ const _generateElementShape = (
   switch (element.type) {
     case "rectangle":
     case "iframe":
-    case "embeddable": {
+    case "embeddable":
+    case "reactEmbed": {
       let shape: ElementShapes[typeof element.type];
       // this is for rendering the stroke/bg of the embeddable, especially
       // when the src url is not set
@@ -845,20 +847,20 @@ const _generateElementShape = (
             rightX - verticalRadius
           } ${rightY - horizontalRadius}
             C ${rightX} ${rightY}, ${rightX} ${rightY}, ${
-            rightX - verticalRadius
-          } ${rightY + horizontalRadius}
+              rightX - verticalRadius
+            } ${rightY + horizontalRadius}
             L ${bottomX + verticalRadius} ${bottomY - horizontalRadius}
             C ${bottomX} ${bottomY}, ${bottomX} ${bottomY}, ${
-            bottomX - verticalRadius
-          } ${bottomY - horizontalRadius}
+              bottomX - verticalRadius
+            } ${bottomY - horizontalRadius}
             L ${leftX + verticalRadius} ${leftY + horizontalRadius}
             C ${leftX} ${leftY}, ${leftX} ${leftY}, ${leftX + verticalRadius} ${
-            leftY - horizontalRadius
-          }
+              leftY - horizontalRadius
+            }
             L ${topX - verticalRadius} ${topY + horizontalRadius}
             C ${topX} ${topY}, ${topX} ${topY}, ${topX + verticalRadius} ${
-            topY + horizontalRadius
-          }`,
+              topY + horizontalRadius
+            }`,
           generateRoughOptions(element, true, isDarkMode),
         );
       } else {
@@ -1092,6 +1094,7 @@ export const getElementShape = <Point extends GlobalPoint | LocalPoint>(
     case "frame":
     case "magicframe":
     case "embeddable":
+    case "reactEmbed":
     case "image":
     case "iframe":
     case "text":
@@ -1194,8 +1197,8 @@ export const getFreedrawOutlinePoints = (
   const inputPoints = element.simulatePressure
     ? element.points
     : element.points.length
-    ? element.points.map(([x, y], i) => [x, y, element.pressures[i]])
-    : [[0, 0, 0.5]];
+      ? element.points.map(([x, y], i) => [x, y, element.pressures[i]])
+      : [[0, 0, 0.5]];
 
   return getStroke(inputPoints as number[][], {
     simulatePressure: element.simulatePressure,

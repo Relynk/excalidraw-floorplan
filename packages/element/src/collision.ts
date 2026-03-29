@@ -45,6 +45,7 @@ import {
   isIframeLikeElement,
   isImageElement,
   isLinearElement,
+  isReactEmbedElement,
   isTextElement,
 } from "./typeChecks";
 import {
@@ -86,6 +87,7 @@ export const shouldTestInside = (element: ExcalidrawElement) => {
     !isTransparent(element.backgroundColor) ||
     hasBoundTextElement(element) ||
     isIframeLikeElement(element) ||
+    isReactEmbedElement(element) ||
     isTextElement(element);
 
   if (element.type === "line") {
@@ -437,6 +439,7 @@ export const intersectElementWithLineSegment = (
     case "text":
     case "iframe":
     case "embeddable":
+    case "reactEmbed":
     case "frame":
     case "selection":
     case "magicframe":

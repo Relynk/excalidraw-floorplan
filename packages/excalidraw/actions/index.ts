@@ -32,6 +32,7 @@ export {
 } from "./actionCanvas";
 
 export { actionSetEmbeddableAsActiveTool } from "./actionEmbeddable";
+export { actionSetReactEmbedAsActiveTool } from "./actionReactEmbed";
 
 export { actionFinalize } from "./actionFinalize";
 

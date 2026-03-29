@@ -132,6 +132,7 @@ export type ActionName =
   | "updateFrameRendering"
   | "setFrameAsActiveTool"
   | "setEmbeddableAsActiveTool"
+  | "setReactEmbedAsActiveTool"
   | "createContainerFromText"
   | "wrapTextInContainer"
   | "commandPalette"

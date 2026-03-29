@@ -1,0 +1,126 @@
+import React from "react";
+
+import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { sceneCoordsToViewportCoords } from "@excalidraw/common";
+
+import type {
+  ElementsMap,
+  NonDeletedExcalidrawElement,
+} from "@excalidraw/element/types";
+import type { AppState } from "../types";
+import type { Scene } from "@excalidraw/element";
+
+const PICKER_WIDTH = 320;
+const PICKER_PADDING = 8;
+const SPACE_BOTTOM = 16;
+
+const getCoordsForPicker = (
+  element: NonDeletedExcalidrawElement,
+  appState: AppState,
+  elementsMap: ElementsMap,
+) => {
+  const [x1, y1] = getElementAbsoluteCoords(element, elementsMap);
+  const { x: viewportX, y: viewportY } = sceneCoordsToViewportCoords(
+    { sceneX: x1 + element.width / 2, sceneY: y1 },
+    appState,
+  );
+  const x = viewportX - appState.offsetLeft - PICKER_WIDTH / 2;
+  const y = viewportY - appState.offsetTop - SPACE_BOTTOM;
+  return { x, y };
+};
+
+interface ReactEmbedPickerProps {
+  element: NonDeletedExcalidrawElement;
+  appState: AppState;
+  elementsMap: ElementsMap;
+  scene: Scene;
+  setAppState: React.Component<unknown, AppState>["setState"];
+  options: Array<{ key: string; label: string; description?: string }>;
+}
+
+export const ReactEmbedPicker = ({
+  element,
+  appState,
+  elementsMap,
+  scene,
+  setAppState,
+  options,
+}: ReactEmbedPickerProps) => {
+  if (
+    appState.contextMenu ||
+    appState.selectedElementsAreBeingDragged ||
+    appState.resizingElement ||
+    appState.isRotating ||
+    appState.viewModeEnabled
+  ) {
+    return null;
+  }
+
+  const { x, y } = getCoordsForPicker(element, appState, elementsMap);
+
+  const handleSelect = (key: string) => {
+    scene.mutateElement(element, {
+      customData: {
+        ...(element.customData ?? {}),
+        componentKey: key,
+      },
+    });
+    setAppState({ showReactEmbedPicker: false });
+  };
+
+  const handleDismiss = () => {
+    setAppState({ showReactEmbedPicker: false });
+  };
+
+  return (
+    <div
+      className="excalidraw__react-embed-picker"
+      style={{
+        top: `${y}px`,
+        left: `${x}px`,
+        width: PICKER_WIDTH,
+        padding: PICKER_PADDING,
+        transform: "translateY(-100%)",
+      }}
+      // Prevent canvas pointer events from firing through the picker
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="excalidraw__react-embed-picker__header">
+        <span>Choose widget</span>
+        <button
+          className="excalidraw__react-embed-picker__close"
+          onClick={handleDismiss}
+          title="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="excalidraw__react-embed-picker__grid">
+        {options.length === 0 ? (
+          <div className="excalidraw__react-embed-picker__empty">
+            No widgets configured. Pass <code>reactEmbedOptions</code> to
+            Excalidraw.
+          </div>
+        ) : (
+          options.map((opt) => (
+            <button
+              key={opt.key}
+              className="excalidraw__react-embed-picker__option"
+              onClick={() => handleSelect(opt.key)}
+              title={opt.description}
+            >
+              <span className="excalidraw__react-embed-picker__option-label">
+                {opt.label}
+              </span>
+              {opt.description && (
+                <span className="excalidraw__react-embed-picker__option-desc">
+                  {opt.description}
+                </span>
+              )}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};

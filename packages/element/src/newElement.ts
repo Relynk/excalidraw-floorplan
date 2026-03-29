@@ -42,6 +42,7 @@ import type {
   ExcalidrawTextContainer,
   ExcalidrawFrameElement,
   ExcalidrawEmbeddableElement,
+  ExcalidrawReactEmbedElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawIframeElement,
   ElementsMap,
@@ -180,6 +181,18 @@ export const newIframeElement = (
   };
 };
 
+export const newReactEmbedElement = (
+  opts: {
+    type: "reactEmbed";
+    componentKey?: string;
+  } & ElementConstructorOpts,
+): NonDeleted<ExcalidrawReactEmbedElement> => {
+  return {
+    ..._newElementBase<ExcalidrawReactEmbedElement>("reactEmbed", opts),
+    customData: { componentKey: opts.componentKey },
+  };
+};
+
 export const newFrameElement = (
   opts: {
     name?: string;
@@ -230,8 +243,8 @@ const getTextElementPositionOffsets = (
       opts.textAlign === "center"
         ? metrics.width / 2
         : opts.textAlign === "right"
-        ? metrics.width
-        : 0,
+          ? metrics.width
+          : 0,
     y: opts.verticalAlign === "middle" ? metrics.height / 2 : 0,
   };
 };

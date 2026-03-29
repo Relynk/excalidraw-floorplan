@@ -10,6 +10,7 @@ import type {
   ExcalidrawElement,
   ExcalidrawTextElement,
   ExcalidrawEmbeddableElement,
+  ExcalidrawReactEmbedElement,
   ExcalidrawLinearElement,
   ExcalidrawBindableElement,
   ExcalidrawFreeDrawElement,
@@ -61,6 +62,12 @@ export const isIframeLikeElement = (
   return (
     !!element && (element.type === "iframe" || element.type === "embeddable")
   );
+};
+
+export const isReactEmbedElement = (
+  element: ExcalidrawElement | null | undefined,
+): element is ExcalidrawReactEmbedElement => {
+  return !!element && element.type === "reactEmbed";
 };
 
 export const isTextElement = (
@@ -254,6 +261,7 @@ export const isExcalidrawElement = (
     case "rectangle":
     case "iframe":
     case "embeddable":
+    case "reactEmbed":
     case "ellipse":
     case "arrow":
     case "freedraw":

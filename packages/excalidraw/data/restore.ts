@@ -114,6 +114,7 @@ export const AllowedExcalidrawActiveTools: Record<
   custom: true,
   frame: true,
   embeddable: true,
+  reactEmbed: true,
   hand: true,
   laser: false,
   magicframe: false,
@@ -528,6 +529,7 @@ export const restoreElement = (
     case "diamond":
     case "iframe":
     case "embeddable":
+    case "reactEmbed":
       return restoreElementWithProperties(element, {});
     case "magicframe":
     case "frame":

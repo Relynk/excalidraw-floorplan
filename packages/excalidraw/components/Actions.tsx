@@ -68,6 +68,7 @@ import DropdownMenu from "./dropdownMenu/DropdownMenu";
 import { PropertiesPopover } from "./PropertiesPopover";
 import {
   EmbedIcon,
+  ReactEmbedIcon,
   extraToolsIcon,
   frameToolIcon,
   mermaidLogoIcon,
@@ -1070,6 +1071,7 @@ export const ShapesSwitcher = ({
     app.state.preferredSelectionTool.type !== "lasso";
 
   const embeddableToolSelected = activeTool.type === "embeddable";
+  const reactEmbedToolSelected = activeTool.type === "reactEmbed";
 
   const { TTDDialogTriggerTunnel } = useTunnels();
 
@@ -1182,6 +1184,7 @@ export const ShapesSwitcher = ({
             "App-toolbar__extra-tools-trigger--selected":
               frameToolSelected ||
               embeddableToolSelected ||
+              reactEmbedToolSelected ||
               lassoToolSelected ||
               // in collab we're already highlighting the laser button
               // outside toolbar, so let's not highlight extra-tools button
@@ -1198,11 +1201,13 @@ export const ShapesSwitcher = ({
             ? frameToolIcon
             : embeddableToolSelected
               ? EmbedIcon
-              : laserToolSelected && !app.props.isCollaborating
-                ? laserPointerToolIcon
-                : lassoToolSelected
-                  ? LassoIcon
-                  : extraToolsIcon}
+              : reactEmbedToolSelected
+                ? ReactEmbedIcon
+                : laserToolSelected && !app.props.isCollaborating
+                  ? laserPointerToolIcon
+                  : lassoToolSelected
+                    ? LassoIcon
+                    : extraToolsIcon}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content
           onClickOutside={() => setIsExtraToolsMenuOpen(false)}
@@ -1225,6 +1230,14 @@ export const ShapesSwitcher = ({
             selected={embeddableToolSelected}
           >
             {t("toolBar.embeddable")}
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            onSelect={() => app.setActiveTool({ type: "reactEmbed" })}
+            icon={ReactEmbedIcon}
+            data-testid="toolbar-react-embed"
+            selected={reactEmbedToolSelected}
+          >
+            {t("toolBar.reactEmbed")}
           </DropdownMenu.Item>
           <DropdownMenu.Item
             onSelect={() => app.setActiveTool({ type: "laser" })}

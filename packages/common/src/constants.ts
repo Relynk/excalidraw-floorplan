@@ -440,6 +440,7 @@ export const DEFAULT_SIDEBAR = {
 export const LIBRARY_DISABLED_TYPES = new Set([
   "iframe",
   "embeddable",
+  "reactEmbed",
   "image",
 ] as const);
 
@@ -460,6 +461,7 @@ export const TOOL_TYPE = {
   frame: "frame",
   magicframe: "magicframe",
   embeddable: "embeddable",
+  reactEmbed: "reactEmbed",
   laser: "laser",
   // Relynk room tools
   "room-freedraw": "room-freedraw",

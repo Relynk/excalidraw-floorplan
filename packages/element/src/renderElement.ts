@@ -394,6 +394,7 @@ const drawElementOnCanvas = (
     case "rectangle":
     case "iframe":
     case "embeddable":
+    case "reactEmbed":
     case "diamond":
     case "ellipse": {
       context.lineJoin = "round";
@@ -893,7 +894,8 @@ export const renderElement = (
     case "image":
     case "text":
     case "iframe":
-    case "embeddable": {
+    case "embeddable":
+    case "reactEmbed": {
       if (renderConfig.isExporting) {
         const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
         const cx = (x1 + x2) / 2 + appState.scrollX;

@@ -25,6 +25,7 @@ import type {
   Theme,
   StrokeRoundness,
   ExcalidrawEmbeddableElement,
+  ExcalidrawReactEmbedElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawElementType,
@@ -156,6 +157,7 @@ export type ToolType =
   | "frame"
   | "magicframe"
   | "embeddable"
+  | "reactEmbed"
   | "laser"
   // Relynk room tools
   | "room-freedraw"
@@ -221,6 +223,7 @@ export type InteractiveCanvasAppState = Readonly<
     activeTool: AppState["activeTool"];
     // renderInteractiveScene
     activeEmbeddable: AppState["activeEmbeddable"];
+    activeReactEmbed: AppState["activeReactEmbed"];
     selectionElement: AppState["selectionElement"];
     selectedGroupIds: AppState["selectedGroupIds"];
     selectedLinearElement: AppState["selectedLinearElement"];
@@ -283,6 +286,10 @@ export interface AppState {
   isLoading: boolean;
   errorMessage: React.ReactNode;
   activeEmbeddable: {
+    element: NonDeletedExcalidrawElement;
+    state: "hover" | "active";
+  } | null;
+  activeReactEmbed: {
     element: NonDeletedExcalidrawElement;
     state: "hover" | "active";
   } | null;
@@ -443,6 +450,7 @@ export interface AppState {
     panels: number;
   };
   showHyperlinkPopup: false | "info" | "editor";
+  showReactEmbedPicker: boolean;
   selectedLinearElement: LinearElementEditor | null;
   snapLines: readonly SnapLine[];
   originSnapOffset: {
@@ -672,6 +680,16 @@ export interface ExcalidrawProps {
     element: NonDeleted<ExcalidrawEmbeddableElement>,
     appState: AppState,
   ) => JSX.Element | null;
+  renderReactEmbed?: (
+    element: NonDeleted<ExcalidrawReactEmbedElement>,
+    appState: AppState,
+  ) => JSX.Element | null;
+  /** List of available React embed options shown in the picker after drawing a reactEmbed element */
+  reactEmbedOptions?: Array<{
+    key: string;
+    label: string;
+    description?: string;
+  }>;
   aiEnabled?: boolean;
   showDeprecatedFonts?: boolean;
   renderScrollbars?: boolean;

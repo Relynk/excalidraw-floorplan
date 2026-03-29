@@ -10,6 +10,7 @@ import { getBoundTextElement } from "@excalidraw/element";
 import {
   isEmbeddableElement,
   isIframeLikeElement,
+  isReactEmbedElement,
   isTextElement,
 } from "@excalidraw/element";
 import {
@@ -299,7 +300,7 @@ const _renderStaticScene = ({
 
   // Paint visible elements
   visibleElements
-    .filter((el) => !isIframeLikeElement(el))
+    .filter((el) => !isIframeLikeElement(el) && !isReactEmbedElement(el))
     .forEach((element) => {
       try {
         const frameId = element.frameId || appState.frameToHighlight?.id;
@@ -381,6 +382,28 @@ const _renderStaticScene = ({
           element.width,
           element.height,
         );
+      }
+    });
+
+  // render react embeds on top (placeholder outline only; actual content rendered as DOM overlay)
+  visibleElements
+    .filter((el) => isReactEmbedElement(el))
+    .forEach((element) => {
+      try {
+        renderElement(
+          element,
+          elementsMap,
+          allElementsMap,
+          rc,
+          context,
+          renderConfig,
+          appState,
+        );
+        if (!isExporting) {
+          renderLinkIcon(element, context, appState, elementsMap);
+        }
+      } catch (error: any) {
+        console.error(error);
       }
     });
 
