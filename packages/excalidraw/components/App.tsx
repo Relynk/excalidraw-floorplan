@@ -9875,6 +9875,7 @@ class App extends React.Component<AppProps, AppState> {
       element = newReactEmbedElement({
         type: "reactEmbed",
         ...baseElementAttributes,
+        strokeColor: "transparent",
       });
     } else {
       element = newElement({
