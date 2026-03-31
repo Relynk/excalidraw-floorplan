@@ -35,7 +35,13 @@ interface ReactEmbedPickerProps {
   elementsMap: ElementsMap;
   scene: Scene;
   setAppState: React.Component<unknown, AppState>["setState"];
-  options: Array<{ key: string; label: string; description?: string }>;
+  options: Array<{
+    key: string;
+    label: string;
+    description?: string;
+    defaultWidth?: number;
+    defaultHeight?: number;
+  }>;
 }
 
 export const ReactEmbedPicker = ({
@@ -58,11 +64,30 @@ export const ReactEmbedPicker = ({
 
   const { x, y } = getCoordsForPicker(element, appState, elementsMap);
 
-  const handleSelect = (key: string) => {
+  const handleSelect = (
+    key: string,
+    defaultWidth?: number,
+    defaultHeight?: number,
+  ) => {
+    const w = defaultWidth ?? element.width;
+    const h = defaultHeight ?? element.height;
+    const aspectRatio = h > 0 ? w / h : undefined;
+
+    // Determine new position: keep element centre fixed when resizing
+    const centerX = element.x + element.width / 2;
+    const centerY = element.y + element.height / 2;
+    const newX = centerX - w / 2;
+    const newY = centerY - h / 2;
+
     scene.mutateElement(element, {
+      x: newX,
+      y: newY,
+      width: w,
+      height: h,
       customData: {
         ...(element.customData ?? {}),
         componentKey: key,
+        aspectRatio,
       },
     });
     setAppState({ showReactEmbedPicker: false });
@@ -106,7 +131,9 @@ export const ReactEmbedPicker = ({
             <button
               key={opt.key}
               className="excalidraw__react-embed-picker__option"
-              onClick={() => handleSelect(opt.key)}
+              onClick={() =>
+                handleSelect(opt.key, opt.defaultWidth, opt.defaultHeight)
+              }
               title={opt.description}
             >
               <span className="excalidraw__react-embed-picker__option-label">

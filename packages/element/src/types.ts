@@ -105,7 +105,11 @@ export type ExcalidrawEmbeddableElement = _ExcalidrawElementBase &
 export type ExcalidrawReactEmbedElement = _ExcalidrawElementBase &
   Readonly<{
     type: "reactEmbed";
-    customData?: { componentKey?: string };
+    customData?: {
+      componentKey?: string;
+      /** Locked aspect ratio (width / height). Set when a component key is chosen. */
+      aspectRatio?: number;
+    };
   }>;
 
 export type MagicGenerationData =

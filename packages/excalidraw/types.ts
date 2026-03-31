@@ -689,6 +689,10 @@ export interface ExcalidrawProps {
     key: string;
     label: string;
     description?: string;
+    /** Default canvas width (scene units) applied when this component is selected. */
+    defaultWidth?: number;
+    /** Default canvas height (scene units) applied when this component is selected. */
+    defaultHeight?: number;
   }>;
   aiEnabled?: boolean;
   showDeprecatedFonts?: boolean;

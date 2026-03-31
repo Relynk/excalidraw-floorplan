@@ -12914,6 +12914,11 @@ class App extends React.Component<AppProps, AppState> {
       });
     }
 
+    // reactEmbed elements with a locked aspectRatio always maintain their ratio
+    const hasLockedReactEmbed = selectedElements.some(
+      (el) => isReactEmbedElement(el) && el.customData?.aspectRatio != null,
+    );
+
     if (
       transformElements(
         pointerDownState.originalElements,
@@ -12922,9 +12927,10 @@ class App extends React.Component<AppProps, AppState> {
         this.scene,
         shouldRotateWithDiscreteAngle(event),
         shouldResizeFromCenter(event),
-        selectedElements.some((element) => isImageElement(element))
-          ? !shouldMaintainAspectRatio(event)
-          : shouldMaintainAspectRatio(event),
+        hasLockedReactEmbed ||
+          (selectedElements.some((element) => isImageElement(element))
+            ? !shouldMaintainAspectRatio(event)
+            : shouldMaintainAspectRatio(event)),
         resizeX,
         resizeY,
         pointerDownState.resize.center.x,
