@@ -102,6 +102,22 @@ export type ExcalidrawEmbeddableElement = _ExcalidrawElementBase &
     type: "embeddable";
   }>;
 
+/**
+ * A single port definition stored on a placed reactEmbed element.
+ * Mirrors ReactEmbedPortDef from @excalidraw/excalidraw/types — kept
+ * separate here to avoid a circular package dependency.
+ */
+export interface ReactEmbedStoredPort {
+  id: string;
+  label: string;
+  relativeX: number;
+  relativeY: number;
+  x?: number;
+  y?: number;
+  acceptsTypes: string[];
+  direction?: "in" | "out" | "bidirectional";
+}
+
 export type ExcalidrawReactEmbedElement = _ExcalidrawElementBase &
   Readonly<{
     type: "reactEmbed";
@@ -109,6 +125,12 @@ export type ExcalidrawReactEmbedElement = _ExcalidrawElementBase &
       componentKey?: string;
       /** Locked aspect ratio (width / height). Set when a component key is chosen. */
       aspectRatio?: number;
+      /**
+       * Port definitions copied from the selected ReactEmbedOptionDef.ports when
+       * a component key is assigned via the picker. Enables pipe-draw snapping to
+       * this element using the same port system as P&ID symbols.
+       */
+      ports?: ReactEmbedStoredPort[];
     };
   }>;
 

@@ -569,6 +569,66 @@ export type OnExportProgress = {
   progress?: number;
 };
 
+// ---------------------------------------------------------------------------
+// React embed port / option types
+// ---------------------------------------------------------------------------
+
+/**
+ * A typed connection port on a reactEmbed element.
+ * Mirrors PidPort from @excalidraw/pid so that reactEmbed elements
+ * can participate in the pipe-draw snap system.
+ *
+ * Coordinates use the same convention as PidPort:
+ *   - relativeX / relativeY: 0–1 fraction of element bounding box (default)
+ *   - x / y: absolute pixel offset from element origin (takes priority)
+ */
+export interface ReactEmbedPortDef {
+  /** Unique within this component definition */
+  id: string;
+  /** Human-readable label, e.g. "Data In" */
+  label: string;
+  /**
+   * Horizontal fraction of the element bounding box (0 = left, 1 = right).
+   * Ignored when `x` is provided.
+   */
+  relativeX: number;
+  /**
+   * Vertical fraction of the element bounding box (0 = top, 1 = bottom).
+   * Ignored when `y` is provided.
+   */
+  relativeY: number;
+  /** Absolute X pixel offset from element origin. Takes priority over relativeX. */
+  x?: number;
+  /** Absolute Y pixel offset from element origin. Takes priority over relativeY. */
+  y?: number;
+  /**
+   * Which pipe/medium types can connect to this port.
+   * An untyped line can connect to any port and inherits the first acceptsType.
+   */
+  acceptsTypes: string[];
+  direction?: "in" | "out" | "bidirectional";
+}
+
+/** A single entry in the reactEmbedOptions array passed to <Excalidraw> */
+export interface ReactEmbedOptionDef {
+  /** Unique identifier used as componentKey on the element */
+  key: string;
+  /** Human-readable name shown in the picker */
+  label: string;
+  /** Optional longer description shown in the picker */
+  description?: string;
+  /** Default canvas width (scene units) applied when this component is selected. */
+  defaultWidth?: number;
+  /** Default canvas height (scene units) applied when this component is selected. */
+  defaultHeight?: number;
+  /**
+   * Port definitions for this component.
+   * These are copied into the element's customData.ports when the component key
+   * is chosen, allowing pipes to snap to the element's ports.
+   */
+  ports?: ReactEmbedPortDef[];
+}
+
 export interface ExcalidrawProps {
   onChange?: (
     elements: readonly OrderedExcalidrawElement[],
@@ -685,15 +745,7 @@ export interface ExcalidrawProps {
     appState: AppState,
   ) => JSX.Element | null;
   /** List of available React embed options shown in the picker after drawing a reactEmbed element */
-  reactEmbedOptions?: Array<{
-    key: string;
-    label: string;
-    description?: string;
-    /** Default canvas width (scene units) applied when this component is selected. */
-    defaultWidth?: number;
-    /** Default canvas height (scene units) applied when this component is selected. */
-    defaultHeight?: number;
-  }>;
+  reactEmbedOptions?: Array<ReactEmbedOptionDef>;
   aiEnabled?: boolean;
   showDeprecatedFonts?: boolean;
   renderScrollbars?: boolean;

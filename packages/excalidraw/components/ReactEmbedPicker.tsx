@@ -7,7 +7,7 @@ import type {
   ElementsMap,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
-import type { AppState } from "../types";
+import type { AppState, ReactEmbedOptionDef } from "../types";
 import type { Scene } from "@excalidraw/element";
 
 const PICKER_WIDTH = 320;
@@ -35,13 +35,7 @@ interface ReactEmbedPickerProps {
   elementsMap: ElementsMap;
   scene: Scene;
   setAppState: React.Component<unknown, AppState>["setState"];
-  options: Array<{
-    key: string;
-    label: string;
-    description?: string;
-    defaultWidth?: number;
-    defaultHeight?: number;
-  }>;
+  options: ReactEmbedOptionDef[];
 }
 
 export const ReactEmbedPicker = ({
@@ -64,13 +58,9 @@ export const ReactEmbedPicker = ({
 
   const { x, y } = getCoordsForPicker(element, appState, elementsMap);
 
-  const handleSelect = (
-    key: string,
-    defaultWidth?: number,
-    defaultHeight?: number,
-  ) => {
-    const w = defaultWidth ?? element.width;
-    const h = defaultHeight ?? element.height;
+  const handleSelect = (opt: ReactEmbedOptionDef) => {
+    const w = opt.defaultWidth ?? element.width;
+    const h = opt.defaultHeight ?? element.height;
     const aspectRatio = h > 0 ? w / h : undefined;
 
     // Determine new position: keep element centre fixed when resizing
@@ -86,8 +76,11 @@ export const ReactEmbedPicker = ({
       height: h,
       customData: {
         ...(element.customData ?? {}),
-        componentKey: key,
+        componentKey: opt.key,
         aspectRatio,
+        // Copy port definitions from the option so the element can participate
+        // in the pipe-draw snap system independently of the options array.
+        ports: opt.ports ?? [],
       },
     });
     setAppState({ showReactEmbedPicker: false });
@@ -131,9 +124,7 @@ export const ReactEmbedPicker = ({
             <button
               key={opt.key}
               className="excalidraw__react-embed-picker__option"
-              onClick={() =>
-                handleSelect(opt.key, opt.defaultWidth, opt.defaultHeight)
-              }
+              onClick={() => handleSelect(opt)}
               title={opt.description}
             >
               <span className="excalidraw__react-embed-picker__option-label">

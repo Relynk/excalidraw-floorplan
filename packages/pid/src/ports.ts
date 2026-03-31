@@ -10,11 +10,15 @@
  * 2. x/y (pixels) — absolute offset from the body bounding box origin
  *    (min x/y of all elements whose role starts with "body").
  *    Precise and independent of decorators. Takes priority over relativeX/Y.
+ *
+ * React embed elements use the same coordinate conventions but resolve
+ * against the element's own bounding box (no group / sub-element indirection).
  */
 import { pointRotateRads, pointFrom } from "@excalidraw/math";
 import type { GlobalPoint } from "@excalidraw/math";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { ReactEmbedStoredPort } from "@excalidraw/element/types";
 
 import type {
   PidPort,
@@ -25,13 +29,28 @@ import type {
 } from "./types";
 
 // ---------------------------------------------------------------------------
-// Type guard
+// Type guards
 // ---------------------------------------------------------------------------
 
 export function isPidSymbolElement(
   element: ExcalidrawElement,
 ): element is ExcalidrawElement & { customData: PidSymbolCustomData } {
   return element.customData?.pidSymbol === true;
+}
+
+/**
+ * Returns true when the element is a reactEmbed with at least one stored port.
+ */
+export function isReactEmbedWithPorts(
+  element: ExcalidrawElement,
+): element is ExcalidrawElement & {
+  customData: { ports: ReactEmbedStoredPort[] };
+} {
+  return (
+    element.type === "reactEmbed" &&
+    Array.isArray(element.customData?.ports) &&
+    (element.customData.ports as unknown[]).length > 0
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +194,78 @@ export function resolvePortPositions(
 }
 
 // ---------------------------------------------------------------------------
+// React embed port resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute absolute canvas positions for all ports on a placed reactEmbed element.
+ *
+ * The element's own bounding box is used as the reference frame (no group
+ * indirection since reactEmbed is a single element).
+ *
+ * Port coordinate resolution (same priority order as PidPort):
+ *   1. port.x / port.y — absolute pixel offset from element origin (top-left)
+ *   2. port.relativeX / port.relativeY — fraction of element width/height
+ *
+ * @param element A reactEmbed element with customData.ports populated.
+ */
+export function resolveReactEmbedPorts(
+  element: ExcalidrawElement,
+): ResolvedPort[] {
+  if (!isReactEmbedWithPorts(element)) return [];
+
+  const ports = element.customData.ports as ReactEmbedStoredPort[];
+  const { x: ex, y: ey, width, height, angle } = element;
+
+  // Rotation centre is the element's own centre
+  const cx = ex + width / 2;
+  const cy = ey + height / 2;
+
+  return ports.map((port) => {
+    let px: number;
+    let py: number;
+
+    if (port.x !== undefined && port.y !== undefined) {
+      px = ex + port.x;
+      py = ey + port.y;
+    } else {
+      px = ex + port.relativeX * width;
+      py = ey + port.relativeY * height;
+    }
+
+    if (angle !== 0) {
+      const rotated = pointRotateRads(
+        pointFrom<GlobalPoint>(px, py),
+        pointFrom<GlobalPoint>(cx, cy),
+        angle,
+      );
+      px = rotated[0];
+      py = rotated[1];
+    }
+
+    // Build a ResolvedPort using the stored port data, cast to PidPort so the
+    // rest of the snap/indicator system works without modification.
+    const pidPort: PidPort = {
+      id: port.id,
+      label: port.label,
+      relativeX: port.relativeX,
+      relativeY: port.relativeY,
+      x: port.x,
+      y: port.y,
+      acceptsTypes: port.acceptsTypes,
+      direction: port.direction,
+    };
+
+    return {
+      port: pidPort,
+      x: px,
+      y: py,
+      ownerElementId: element.id,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Collection / search helpers
 // ---------------------------------------------------------------------------
 
@@ -184,8 +275,17 @@ export function getAllResolvedPorts(
 ): ResolvedPort[] {
   const result: ResolvedPort[] = [];
   for (const el of elements) {
-    if (!isPidSymbolElement(el)) continue;
-    for (const resolved of resolvePortPositions(el, elements)) {
+    let resolvedList: ResolvedPort[];
+
+    if (isPidSymbolElement(el)) {
+      resolvedList = resolvePortPositions(el, elements);
+    } else if (isReactEmbedWithPorts(el)) {
+      resolvedList = resolveReactEmbedPorts(el);
+    } else {
+      continue;
+    }
+
+    for (const resolved of resolvedList) {
       if (
         activePipeType !== null &&
         !resolved.port.acceptsTypes.includes(activePipeType)

@@ -1,10 +1,10 @@
 /**
- * Pipe connection tracking: move pipe endpoints when connected P&ID symbols move.
+ * Pipe connection tracking: move pipe endpoints when connected elements move.
  *
- * When a symbol group is dragged by (dx, dy), any pipe line whose
- * pidConnection.startPort.elementId or pidConnection.endPort.elementId matches
- * the symbol's root element id should have the corresponding endpoint moved by
- * the same offset.
+ * When a P&ID symbol group or a reactEmbed element is dragged by (dx, dy),
+ * any pipe line whose pidConnection.startPort.elementId or
+ * pidConnection.endPort.elementId matches the element's id should have the
+ * corresponding endpoint moved by the same offset.
  *
  * This mirrors Pattern B (bound text follows container) from the excalidraw
  * binding system — a direct offset copy without intersection recalculation.
@@ -20,7 +20,7 @@ import { isLinearElement } from "@excalidraw/element";
 
 import type { Scene } from "@excalidraw/element/Scene";
 
-import { isPidSymbolElement } from "./ports";
+import { isPidSymbolElement, isReactEmbedWithPorts } from "./ports";
 import type { PidConnectionCustomData } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +45,10 @@ function isPipeElement(
 // ---------------------------------------------------------------------------
 
 /**
- * Move the pipe endpoints that are connected to a P&ID symbol that just moved.
+ * Move the pipe endpoints that are connected to an element that just moved.
+ *
+ * Supports both P&ID symbol groups (`customData.pidSymbol === true`) and
+ * reactEmbed elements that have ports stored in `customData.ports`.
  *
  * IMPORTANT: `dragOffset` must be the total offset from drag-start (not a
  * per-frame delta), and `originalElements` must be the element snapshots taken
@@ -58,13 +61,13 @@ function isPipeElement(
  * falls back to `currentPosition + dragOffset`, which is correct for a
  * one-shot move.
  *
- * @param movedSymbolElement  The root element of the moved symbol (pidSymbol: true).
- * @param dragOffset          Total offset from drag-start (same value used to move the symbol).
+ * @param movedSymbolElement  The moved element (P&ID symbol root or reactEmbed with ports).
+ * @param dragOffset          Total offset from drag-start (same value used to move the element).
  * @param scene               The live Scene instance (for mutateElement).
  * @param simultaneouslyUpdated
  *   Set of element ids also being moved in the same operation. Pipe elements
  *   in this set are skipped to avoid double-moving when both the pipe and its
- *   connected symbol are selected.
+ *   connected element are selected.
  * @param originalElements
  *   Snapshot of element states at drag-start (from pointerDownState.originalElements).
  *   Pass `null` for keyboard/single-step moves.
@@ -76,7 +79,10 @@ export function updateConnectedPipes(
   simultaneouslyUpdated: Set<string>,
   originalElements: ReadonlyMap<string, ExcalidrawElement> | null,
 ): void {
-  if (!isPidSymbolElement(movedSymbolElement)) {
+  if (
+    !isPidSymbolElement(movedSymbolElement) &&
+    !isReactEmbedWithPorts(movedSymbolElement)
+  ) {
     return;
   }
 
