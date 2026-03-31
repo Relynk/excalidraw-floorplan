@@ -853,6 +853,14 @@ body.excalidraw-cursor-resize * {
     align-items: center;
     justify-content: center;
     border-radius: var(--react-embed-radius);
+    // Prevent text selection on non-interactive areas while panning in view mode.
+    // ReactEmbedInteractive children override this back to auto via inline style.
+    user-select: none;
+
+    // Switch to grabbing cursor while actively pressing down to pan.
+    &:active {
+      cursor: grabbing !important;
+    }
   }
 
   .excalidraw__react-embed__outer {

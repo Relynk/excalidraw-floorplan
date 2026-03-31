@@ -1495,6 +1495,131 @@ class App extends React.Component<AppProps, AppState> {
     return true;
   }
 
+  /** Mirror of handleIframeLikeElementHover for reactEmbed elements. */
+  private handleReactEmbedElementHover = ({
+    hitElement,
+    scenePointer,
+    moveEvent,
+  }: {
+    hitElement: NonDeleted<ExcalidrawElement> | null;
+    scenePointer: { x: number; y: number };
+    moveEvent: React.PointerEvent<HTMLCanvasElement>;
+  }): boolean => {
+    if (
+      hitElement &&
+      isReactEmbedElement(hitElement) &&
+      hitElement.customData?.componentKey &&
+      (this.state.viewModeEnabled ||
+        this.isIframeLikeElementCenter(
+          hitElement as unknown as ExcalidrawIframeLikeElement,
+          moveEvent,
+          scenePointer.x,
+          scenePointer.y,
+        ))
+    ) {
+      setCursor(this.interactiveCanvas, CURSOR_TYPE.POINTER);
+      this.setState({
+        activeReactEmbed: {
+          element: hitElement as ExcalidrawReactEmbedElement,
+          state: "hover",
+        },
+      });
+      return true;
+    } else if (this.state.activeReactEmbed?.state === "hover") {
+      this.setState({ activeReactEmbed: null });
+    }
+    return false;
+  };
+
+  /** Mirror of handleIframeLikeCenterClick for reactEmbed elements. */
+  private handleReactEmbedCenterClick(): boolean {
+    if (
+      !this.lastPointerDownEvent ||
+      !this.lastPointerUpEvent ||
+      this.lastPointerDownEvent.button !== POINTER_BUTTON.MAIN ||
+      isHoldingSpace ||
+      !oneOf(this.state.activeTool.type, ["laser", "selection", "lasso"])
+    ) {
+      return false;
+    }
+
+    const viewportClickStart_scenePoint = pointFrom(
+      viewportCoordsToSceneCoords(
+        {
+          clientX: this.lastPointerDownEvent.clientX,
+          clientY: this.lastPointerDownEvent.clientY,
+        },
+        this.state,
+      ),
+    );
+    const viewportClickEnd_scenePoint = pointFrom(
+      viewportCoordsToSceneCoords(
+        {
+          clientX: this.lastPointerUpEvent.clientX,
+          clientY: this.lastPointerUpEvent.clientY,
+        },
+        this.state,
+      ),
+    );
+
+    if (
+      pointDistance(
+        viewportClickStart_scenePoint,
+        viewportClickEnd_scenePoint,
+      ) > DRAGGING_THRESHOLD
+    ) {
+      return false;
+    }
+
+    const hitElement = this.getElementAtPosition(
+      viewportClickStart_scenePoint[0],
+      viewportClickStart_scenePoint[1],
+    );
+
+    if (
+      !hitElement ||
+      !isReactEmbedElement(hitElement) ||
+      !hitElement.customData?.componentKey ||
+      this.lastPointerUpEvent.timeStamp - this.lastPointerDownEvent.timeStamp >
+        300 ||
+      gesture.pointers.size >= 2
+    ) {
+      return false;
+    }
+
+    // In edit mode require a centre-click (same UX as embeddables)
+    if (
+      !this.state.viewModeEnabled &&
+      !this.isIframeLikeElementCenter(
+        hitElement as unknown as ExcalidrawIframeLikeElement,
+        this.lastPointerUpEvent,
+        viewportClickEnd_scenePoint[0],
+        viewportClickEnd_scenePoint[1],
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      this.state.activeReactEmbed?.element === hitElement &&
+      this.state.activeReactEmbed?.state === "active"
+    ) {
+      return true;
+    }
+
+    this.setState({
+      activeReactEmbed: {
+        element: hitElement as ExcalidrawReactEmbedElement,
+        state: "active",
+      },
+      selectedElementIds: { [hitElement.id]: true },
+      newElement: null,
+      selectionElement: null,
+    });
+
+    return true;
+  }
+
   private isDoubleClick = (
     lastPointerEvent:
       | PointerEvent
@@ -1900,9 +2025,26 @@ class App extends React.Component<AppProps, AppState> {
             return null;
           }
 
+          // In view mode any element with a componentKey is always interactive.
+          // In edit mode the element must be explicitly activated (centre-click).
           const isActive =
-            this.state.activeReactEmbed?.element === el &&
-            this.state.activeReactEmbed?.state === "active";
+            (this.state.viewModeEnabled && !!el.customData?.componentKey) ||
+            (this.state.activeReactEmbed?.element === el &&
+              this.state.activeReactEmbed?.state === "active");
+
+          // In view mode, forward pointer-down events that were NOT stopped by
+          // a ReactEmbedInteractive child directly to the pan handler.
+          // We skip dispatchEvent (which bypasses React's synthetic event
+          // system) and call handleCanvasPanUsingWheelOrSpaceDrag directly.
+          // Once a pan starts it registers its own window listeners for
+          // pointermove/pointerup, so we only need to forward pointerdown.
+          const forwardPointerDownToCanvas = this.state.viewModeEnabled
+            ? (e: React.PointerEvent<HTMLDivElement>) => {
+                // Prevent browser defaults (text selection, drag initiation).
+                e.preventDefault();
+                this.handleCanvasPanUsingWheelOrSpaceDrag(e);
+              }
+            : undefined;
 
           return (
             <div
@@ -1937,7 +2079,14 @@ class App extends React.Component<AppProps, AppState> {
                   pointerEvents: isActive
                     ? POINTER_EVENTS.enabled
                     : POINTER_EVENTS.disabled,
+                  // Show grab cursor over non-interactive widget areas in view mode
+                  // so the user knows they can pan. ReactEmbedInteractive children
+                  // override this back to "default" via their own cursor style.
+                  cursor: this.state.viewModeEnabled
+                    ? CURSOR_TYPE.GRAB
+                    : undefined,
                 }}
+                onPointerDown={forwardPointerDownToCanvas}
               >
                 <div
                   className="excalidraw__react-embed__outer"
@@ -5467,6 +5616,7 @@ class App extends React.Component<AppProps, AppState> {
           selectedGroupIds: {},
           editingGroupId: null,
           activeEmbeddable: null,
+          activeReactEmbed: null,
         });
       }
       isHoldingSpace = false;
@@ -5681,6 +5831,7 @@ class App extends React.Component<AppProps, AppState> {
         snapLines: prevState.snapLines.length ? [] : prevState.snapLines,
         originSnapOffset: null,
         activeEmbeddable: null,
+        activeReactEmbed: null,
         selectedLinearElement: isSelectionLikeTool(nextActiveTool.type)
           ? prevState.selectedLinearElement
           : null,
@@ -5765,6 +5916,7 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({
         selectedElementIds: makeNextSelectedElementIds({}, this.state),
         activeEmbeddable: null,
+        activeReactEmbed: null,
       });
     }
     gesture.initialScale = this.state.zoom.value;
@@ -5953,6 +6105,7 @@ class App extends React.Component<AppProps, AppState> {
       selectedGroupIds: {},
       editingGroupId: null,
       activeEmbeddable: null,
+      activeReactEmbed: null,
     });
   }
 
@@ -7464,6 +7617,11 @@ class App extends React.Component<AppProps, AppState> {
         hitElement,
         scenePointer,
         moveEvent: event,
+      }) &&
+      !this.handleReactEmbedElementHover({
+        hitElement,
+        scenePointer,
+        moveEvent: event,
       })
     ) {
       this.hitLinkElement = this.getElementLinkAtPosition(
@@ -8224,6 +8382,10 @@ class App extends React.Component<AppProps, AppState> {
       return;
     }
 
+    if (this.handleReactEmbedCenterClick()) {
+      return;
+    }
+
     if (this.editorInterface.isTouchScreen) {
       const hitElement = this.getElementAtPosition(
         scenePointer.x,
@@ -8246,6 +8408,7 @@ class App extends React.Component<AppProps, AppState> {
     } else if (this.state.viewModeEnabled) {
       this.setState({
         activeEmbeddable: null,
+        activeReactEmbed: null,
         selectedElementIds: {},
       });
     }
@@ -8543,6 +8706,7 @@ class App extends React.Component<AppProps, AppState> {
         selectedGroupIds: {},
         editingGroupId: null,
         activeEmbeddable: null,
+        activeReactEmbed: null,
       });
     }
   };
@@ -11741,6 +11905,7 @@ class App extends React.Component<AppProps, AppState> {
             selectedGroupIds: {},
             editingGroupId: null,
             activeEmbeddable: null,
+            activeReactEmbed: null,
           });
         }
         // reset cursor
@@ -12225,6 +12390,7 @@ class App extends React.Component<AppProps, AppState> {
     this.setState((prevState) => ({
       selectedElementIds: makeNextSelectedElementIds({}, prevState),
       activeEmbeddable: null,
+      activeReactEmbed: null,
       selectedGroupIds: {},
       // Continue editing the same group if the user selected a different
       // element from it
@@ -12238,6 +12404,7 @@ class App extends React.Component<AppProps, AppState> {
     this.setState({
       selectedElementIds: makeNextSelectedElementIds({}, this.state),
       activeEmbeddable: null,
+      activeReactEmbed: null,
       previousSelectedElementIds: this.state.selectedElementIds,
       selectedLinearElement: null,
     });
@@ -12849,6 +13016,7 @@ class App extends React.Component<AppProps, AppState> {
       isResizing: transformHandleType && transformHandleType !== "rotation",
       isRotating: transformHandleType === "rotation",
       activeEmbeddable: null,
+      activeReactEmbed: null,
     });
     const pointerCoords = pointerDownState.lastCoords;
     let [resizeX, resizeY] = getGridPoint(

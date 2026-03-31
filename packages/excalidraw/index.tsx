@@ -427,3 +427,5 @@ export function useExcalidrawStateValue(
 // -----------------------------------------------------------------------------
 
 export { _useOnAppStateChange as useOnExcalidrawStateChange };
+
+export { ReactEmbedInteractive } from "./components/ReactEmbedInteractive";
